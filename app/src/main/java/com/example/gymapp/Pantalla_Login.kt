@@ -25,7 +25,7 @@ fun Pantalla_Login() {
             .padding(24.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Text(text = "GymApp", style = MaterialTheme.typography.headlineMedium)
+        Text(text = "FitManager", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
