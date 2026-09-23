@@ -14,13 +14,17 @@ IF OBJECT_ID('usp_RegistrarContrasena', 'P') IS NOT NULL DROP PROCEDURE usp_Regi
 GO
 
 -- Nivel más dependiente primero (tablas de detalle / conexión)
+IF OBJECT_ID('RespuestaSeguridad', 'U') IS NOT NULL DROP TABLE RespuestaSeguridad;
+IF OBJECT_ID('Meta', 'U') IS NOT NULL DROP TABLE Meta;
 IF OBJECT_ID('Notificacion', 'U') IS NOT NULL DROP TABLE Notificacion;
 IF OBJECT_ID('MantenimientoMaquina', 'U') IS NOT NULL DROP TABLE MantenimientoMaquina;
 IF OBJECT_ID('MaquinaEquipo', 'U') IS NOT NULL DROP TABLE MaquinaEquipo;
+IF OBJECT_ID('EventoGimnasio', 'U') IS NOT NULL DROP TABLE EventoGimnasio;
 IF OBJECT_ID('AsignacionEntrenador', 'U') IS NOT NULL DROP TABLE AsignacionEntrenador;
 IF OBJECT_ID('ClienteClase', 'U') IS NOT NULL DROP TABLE ClienteClase;
 IF OBJECT_ID('ClaseGrupal', 'U') IS NOT NULL DROP TABLE ClaseGrupal;
 IF OBJECT_ID('Asistencia', 'U') IS NOT NULL DROP TABLE Asistencia;
+IF OBJECT_ID('HistorialRutina', 'U') IS NOT NULL DROP TABLE HistorialRutina;
 IF OBJECT_ID('SerieEjercicio', 'U') IS NOT NULL DROP TABLE SerieEjercicio;
 IF OBJECT_ID('BloqueEjercicio', 'U') IS NOT NULL DROP TABLE BloqueEjercicio;
 IF OBJECT_ID('DiaRutina', 'U') IS NOT NULL DROP TABLE DiaRutina;
@@ -39,6 +43,8 @@ IF OBJECT_ID('Ejercicio', 'U') IS NOT NULL DROP TABLE Ejercicio;
 IF OBJECT_ID('Usuario', 'U') IS NOT NULL DROP TABLE Usuario;
 IF OBJECT_ID('Municipio', 'U') IS NOT NULL DROP TABLE Municipio;
 -- Catálogos base (nadie los referencia ya en este punto)
+IF OBJECT_ID('NivelEntrenador', 'U') IS NOT NULL DROP TABLE NivelEntrenador;
+IF OBJECT_ID('PreguntaSeguridad', 'U') IS NOT NULL DROP TABLE PreguntaSeguridad;
 IF OBJECT_ID('Rol', 'U') IS NOT NULL DROP TABLE Rol;
 IF OBJECT_ID('Sucursal', 'U') IS NOT NULL DROP TABLE Sucursal;
 IF OBJECT_ID('TipoMembresia', 'U') IS NOT NULL DROP TABLE TipoMembresia;
@@ -315,6 +321,41 @@ CREATE TABLE UsuarioRol (
 );
 GO
 
+-- Clasificación de entrenadores: catálogo de nivel/categoría
+CREATE TABLE NivelEntrenador (
+    id_nivel_entrenador  INT IDENTITY(1,1) PRIMARY KEY,
+    nombre_nivel         VARCHAR(30) NOT NULL UNIQUE   -- Junior, Senior, Certificado...
+);
+GO
+
+-- Se agrega por ALTER (no en el CREATE original de Entrenador) porque
+-- Entrenador se crea antes que NivelEntrenador en el orden de dependencias.
+ALTER TABLE Entrenador
+    ADD id_nivel_entrenador INT NULL
+        CONSTRAINT FK_Entrenador_NivelEntrenador FOREIGN KEY REFERENCES NivelEntrenador(id_nivel_entrenador);
+GO
+
+-- Test de recuperación de contraseña: preguntas de seguridad (catálogo)
+CREATE TABLE PreguntaSeguridad (
+    id_pregunta     INT IDENTITY(1,1) PRIMARY KEY,
+    texto_pregunta  VARCHAR(150) NOT NULL UNIQUE   -- "¿Nombre de tu mascota?", etc.
+);
+GO
+
+-- Fechas y horas: calendario general de eventos del gimnasio
+CREATE TABLE EventoGimnasio (
+    id_evento       INT IDENTITY(1,1) PRIMARY KEY,
+    id_sucursal     INT NULL,                 -- NULL si aplica a toda la cadena
+    nombre_evento   VARCHAR(100) NOT NULL,
+    descripcion     VARCHAR(255) NULL,
+    fecha_inicio    DATETIME NOT NULL,
+    fecha_fin       DATETIME NOT NULL,
+    tipo_evento     VARCHAR(50) NULL,         -- Mantenimiento, Torneo, Promoción, Día festivo...
+    CONSTRAINT FK_EventoGimnasio_Sucursal FOREIGN KEY (id_sucursal) REFERENCES Sucursal(id_sucursal),
+    CONSTRAINT CK_EventoGimnasio_Fechas CHECK (fecha_fin >= fecha_inicio)
+);
+GO
+
 /* ---------------------------------------------------------
    10. RUTINAS PERSONALIZADAS (dependen de Cliente, Entrenador, Ejercicio)
    --------------------------------------------------------- */
@@ -336,6 +377,18 @@ CREATE TABLE DiaRutina (
     nombre_dia     VARCHAR(50) NULL,    -- "Día de pierna", etc.
     CONSTRAINT FK_DiaRutina_Rutina FOREIGN KEY (id_rutina) REFERENCES Rutina(id_rutina),
     CONSTRAINT UQ_DiaRutina UNIQUE (id_rutina, numero_dia)
+);
+GO
+
+-- Rutina: historial — bitácora de cada vez que el cliente ejecuta un día de su rutina
+CREATE TABLE HistorialRutina (
+    id_historial       INT IDENTITY(1,1) PRIMARY KEY,
+    id_dia_rutina      INT NOT NULL,
+    fecha_realizacion  DATE NOT NULL DEFAULT GETDATE(),
+    completado         BIT NOT NULL DEFAULT 0,
+    observaciones      VARCHAR(255) NULL,
+    CONSTRAINT FK_HistorialRutina_DiaRutina FOREIGN KEY (id_dia_rutina)
+        REFERENCES DiaRutina(id_dia_rutina)
 );
 GO
 
