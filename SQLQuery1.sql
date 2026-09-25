@@ -504,7 +504,35 @@ CREATE TABLE Notificacion (
 GO
 
 /* ---------------------------------------------------------
-   14. PROCEDIMIENTOS ALMACENADOS (dependen de las tablas anteriores)
+   14. METAS Y RECUPERACIÓN DE CONTRASEÑA (dependen de Cliente / AliasUsuario)
+   --------------------------------------------------------- */
+CREATE TABLE Meta (
+    id_meta          INT IDENTITY(1,1) PRIMARY KEY,
+    id_cliente       INT NOT NULL,
+    tipo_meta        VARCHAR(50) NOT NULL,   -- Pérdida de peso, Ganancia muscular, Resistencia...
+    descripcion      VARCHAR(255) NULL,
+    valor_objetivo   DECIMAL(10,2) NULL,     -- ej. peso meta en kg
+    fecha_inicio     DATE NOT NULL DEFAULT GETDATE(),
+    fecha_objetivo   DATE NULL,
+    estado           VARCHAR(20) NOT NULL DEFAULT 'En progreso',
+    CONSTRAINT FK_Meta_Cliente FOREIGN KEY (id_cliente) REFERENCES Cliente(id_cliente),
+    CONSTRAINT CK_Meta_Estado CHECK (estado IN ('En progreso','Cumplida','Cancelada'))
+);
+GO
+
+CREATE TABLE RespuestaSeguridad (
+    id_respuesta      INT IDENTITY(1,1) PRIMARY KEY,
+    id_alias          INT NOT NULL,
+    id_pregunta       INT NOT NULL,
+    respuesta_hash    VARBINARY(32) NOT NULL,   -- igual que la contraseña: nunca en texto plano
+    CONSTRAINT FK_RespuestaSeguridad_AliasUsuario FOREIGN KEY (id_alias) REFERENCES AliasUsuario(id_alias),
+    CONSTRAINT FK_RespuestaSeguridad_Pregunta FOREIGN KEY (id_pregunta) REFERENCES PreguntaSeguridad(id_pregunta),
+    CONSTRAINT UQ_RespuestaSeguridad UNIQUE (id_alias, id_pregunta)
+);
+GO
+
+/* ---------------------------------------------------------
+   15. PROCEDIMIENTOS ALMACENADOS (dependen de las tablas anteriores)
    --------------------------------------------------------- */
 CREATE OR ALTER PROCEDURE usp_RegistrarContrasena
     @id_alias INT,
