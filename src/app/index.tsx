@@ -1,12 +1,16 @@
 import { useState } from 'react';
+import { loginPorTrama } from '../services/conexion';
+import { useRouter } from 'expo-router';
 import { Button, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 
 type Usuario = {
   correo: string;
   contrasena: string;
 };
-
+// true = entra directo sin verificar (solo para pruebas, sin base de datos)
+const SALTAR_LOGIN = true;
 export default function Index() {
+  const router = useRouter();
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<Usuario[]>([]);
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
@@ -23,12 +27,21 @@ export default function Index() {
     }
   };
 
-  const iniciarSesion = () => {
-    const existe = usuariosRegistrados.some(
-      (u) => u.correo === correo && u.contrasena === contrasena
-    );
-    setMensaje(existe ? 'Sesión iniciada correctamente' : 'Correo o contraseña incorrectos');
-  };
+ const iniciarSesion = async () => {
+  if (SALTAR_LOGIN) {
+    router.push({ pathname: '/perfil', params: { correo: correo || 'invitado@fitmanager.com' } });
+    return;
+  }
+
+  // Verificación normal (se usa cuando SALTAR_LOGIN = false)
+  const valido = await validarLogin(correo, contrasena);
+  if (valido) {
+    setMensaje('');
+    router.push({ pathname: '/perfil', params: { correo } });
+  } else {
+    setMensaje('Correo o contraseña incorrectos');
+  }
+};
 
   return (
     <View style={styles.container}>
