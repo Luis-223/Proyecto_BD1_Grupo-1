@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { loginPorTrama } from '../services/conexion';
 import { useRouter } from 'expo-router';
 import { Button, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 
