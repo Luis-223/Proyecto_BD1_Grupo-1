@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { loginPorTrama } from '../services/conexion';
 import { useRouter } from 'expo-router';
 import { Button, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -26,21 +27,26 @@ export default function Index() {
     }
   };
 
- const iniciarSesion = async () => {
-  if (SALTAR_LOGIN) {
-    router.push({ pathname: '/perfil', params: { correo: correo || 'invitado@fitmanager.com' } });
+const iniciarSesion = async () => {
+  if (!correo || !contrasena) {
+    setMensaje('Completa ambos campos');
     return;
   }
-
-  // Verificación normal (se usa cuando SALTAR_LOGIN = false)
-  const valido = await validarLogin(correo, contrasena);
-  if (valido) {
-    setMensaje('');
-    router.push({ pathname: '/perfil', params: { correo } });
-  } else {
-    setMensaje('Correo o contraseña incorrectos');
+  try {
+    const res = await loginPorTrama(correo, contrasena);
+    if (res.codigo === '00') {
+      setMensaje('');
+      router.push({
+        pathname: '/perfil',
+        params: { correo, nombre: res.nombre, rol: res.rol, idUsuario: res.idUsuario },
+      });
+    } else {
+      setMensaje(res.detalle);
+    }
+  } catch (e) {
+    setMensaje('No se pudo conectar con el servidor');
   }
-};
+};  
 
   return (
     <View style={styles.container}>
