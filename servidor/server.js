@@ -1,115 +1,75 @@
-// server.js
+// server.js — ARCHIVO PRINCIPAL DEL SERVIDOR
+// Aquí se arma el servidor: se cargan las herramientas, se conectan
+// las rutas de cada sección y se enciende en el puerto del .env.
+// Las rutas en sí viven en la carpeta "rutas".
+require('dotenv').config(); // 1. Cargar el .env ANTES que todo lo demás
 
-// Cargamos el .env ANTES que todo lo demás
-require('dotenv').config();
+// HERRAMIENTAS
+const express = require('express'); // el servidor web
+const cors = require('cors'); // permite que la app (otro dispositivo) se conecte
+const http = require('http'); // Socket.io necesita el servidor http "puro"
+const { Server } = require('socket.io'); // tiempo real
+const { conectar } = require('./db');
+const { configurarSocket } = require('./socket');
 
-// Traemos las herramientas que instalamos
-const express = require('express');
-const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
-const { conectar, sql } = require('./db');
-const { enviarCodigoVerificacion } = require('./mailer');
+// Sin la clave para firmar tokens el login no puede funcionar
+if (!process.env.JWT_SECRET) {
+  console.error('Falta JWT_SECRET en el archivo .env. Agrégala y vuelve a arrancar.');
+  process.exit(1);
+}
 
-// Creamos la aplicación y el servidor de tiempo real
+//CREAR EL SERVIDOR
 const app = express();
-app.use(express.json()); // entender JSON
-app.use(cors());         // permitir que la app del celular se conecte
+app.use(express.json()); // entender datos JSON que manda la app
+app.use(cors()); // aceptar peticiones de la app móvil
 
 const servidorHttp = http.createServer(app);
 const io = new Server(servidorHttp, { cors: { origin: '*' } });
+configurarSocket(io);
+app.set('io', io); // así las rutas pueden mandar avisos en tiempo real
 
-// Cuando la app se conecta o se desconecta en tiempo real
-io.on('connection', (socket) => {
-  console.log('Un cliente se conectó:', socket.id);
-  socket.on('disconnect', () => {
-    console.log('Un cliente se desconectó:', socket.id);
-  });
-});
 
-// Ruta de prueba
+//RUTAS DE PRUEBA
+// GET /  -> confirma que el servidor está encendido
 app.get('/', (req, res) => {
-  res.send('¡El servidor está funcionando!');
+  res.send('¡El servidor de FitManager está funcionando!');
 });
 
-// GET /usuarios: lista de usuarios (sin código ni token, por seguridad)
-app.get('/usuarios', async (req, res) => {
+// GET /salud -> confirma que el servidor llega a la base de datos
+app.get('/salud', async (req, res) => {
   try {
     const pool = await conectar();
-    const resultado = await pool.request()
-      .query('SELECT Id, Nombre, Correo, Verificado FROM Usuarios');
-    res.json(resultado.recordset);
+    await pool.request().query('SELECT 1 AS ok');
+    res.json({ servidor: 'ok', baseDeDatos: 'ok' });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'No se pudo consultar la base de datos' });
+    res.status(500).json({ servidor: 'ok', baseDeDatos: 'sin conexión' });
   }
 });
 
-// POST /usuarios: crea un usuario y avisa a la app al instante
-app.post('/usuarios', async (req, res) => {
-  const { nombre, correo } = req.body;
-  try {
-    const pool = await conectar();
-    const resultado = await pool.request()
-      .input('nombre', sql.NVarChar(100), nombre)
-      .input('correo', sql.NVarChar(150), correo)
-      .query(`INSERT INTO Usuarios (Nombre, Correo)
-              OUTPUT INSERTED.Id, INSERTED.Nombre, INSERTED.Correo, INSERTED.Verificado
-              VALUES (@nombre, @correo)`);
-    const nuevo = resultado.recordset[0];
-    io.emit('usuario_nuevo', nuevo); // ← aviso en tiempo real a todas las apps
-    res.status(201).json(nuevo);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'No se pudo crear el usuario' });
-  }
+//RUTAS DE CADA SECCIÓN (cada archivo está en la carpeta rutas)
+app.use('/auth', require('./rutas/auth')); // inicio de sesión y palabra clave
+app.use('/cliente', require('./rutas/cliente')); // membresía, rutinas, metas, notificaciones
+app.use('/clases', require('./rutas/clases')); // clases grupales e inscripción
+
+//ERRORES GENERALES
+// Ruta que no existe
+app.use((req, res) => {
+  res.status(404).json({ error: `No existe la ruta ${req.method} ${req.originalUrl}` });
 });
 
-// POST /enviar-codigo: genera un código, lo GUARDA y lo manda por correo
-app.post('/enviar-codigo', async (req, res) => {
-  const { correo } = req.body;
-  const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-  try {
-    const pool = await conectar();
-    const resultado = await pool.request()
-      .input('correo', sql.NVarChar(150), correo)
-      .input('codigo', sql.NVarChar(6), codigo)
-      .query('UPDATE Usuarios SET CodigoVerificacion = @codigo WHERE Correo = @correo');
-    if (resultado.rowsAffected[0] === 0) {
-      return res.status(404).json({ error: 'Ese correo no está registrado' });
-    }
-    await enviarCodigoVerificacion(correo, codigo);
-    res.json({ mensaje: 'Código enviado, revisa tu correo' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'No se pudo enviar el correo' });
+// JSON mal escrito o cualquier error no previsto
+app.use((error, req, res, next) => {
+  if (error.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'El JSON enviado no es válido' });
   }
+  console.error(error);
+  res.status(500).json({ error: 'Error inesperado en el servidor' });
 });
 
-// POST /verificar-codigo: revisa si el código es correcto
-app.post('/verificar-codigo', async (req, res) => {
-  const { correo, codigo } = req.body;
-  try {
-    const pool = await conectar();
-    const resultado = await pool.request()
-      .input('correo', sql.NVarChar(150), correo)
-      .input('codigo', sql.NVarChar(6), String(codigo))
-      .query(`UPDATE Usuarios SET Verificado = 1, CodigoVerificacion = NULL
-              WHERE Correo = @correo AND CodigoVerificacion = @codigo`);
-    if (resultado.rowsAffected[0] === 0) {
-      return res.status(400).json({ error: 'Código incorrecto' });
-    }
-    io.emit('usuario_verificado', { correo }); // ← aviso en tiempo real
-    res.json({ mensaje: 'Correo verificado' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'No se pudo verificar' });
-  }
-});
-
-// Encendemos el servidor
-// '0.0.0.0' = acepta conexiones de otros equipos del WiFi (tu celular)
-const PUERTO = process.env.PORT || 3000;
+//ENCENDER EL SERVIDOR
+// '0.0.0.0' = acepta conexiones de otros equipos de la red (la app)
+const PUERTO = Number(process.env.PORT) || 3000;
 servidorHttp.listen(PUERTO, '0.0.0.0', () => {
-  console.log(`Servidor + Socket.io corriendo en http://localhost:${PUERTO}`);
+  console.log(`Servidor FitManager corriendo en http://localhost:${PUERTO}`);
 });
