@@ -12,8 +12,7 @@
 // los datos de otro cliente cambiando un número.
 const express = require('express');
 const { sql, conectar, responderErrorSql } = require('../db');
-const { verificarToken, soloClientes } = require('../seguridad');
-
+const { verificarToken, soloClientes, soloAccesoCompleto } = require('../seguridad');
 const router = express.Router();
 router.use(verificarToken, soloClientes); // protege TODAS las rutas de este archivo
 
@@ -44,8 +43,21 @@ router.get('/membresia', async (req, res) => {
           AND CAST(GETDATE() AS DATE) BETWEEN m.fecha_inicio AND m.fecha_fin
         ORDER BY m.fecha_fin DESC`);
 
-    if (actual.recordset.length === 0) {
-      return res.json({ activa: false, mensaje: 'No tienes una membresía vigente' });
+        if (actual.recordset.length === 0) {
+      // Sin membresía vigente: la última que tuvo, para mostrar "venció el ..."
+      const ultima = await pool.request()
+        .input('id_cliente', sql.Int, idCliente)
+        .query(`
+          SELECT TOP 1 t.nombre_tipo AS tipo, m.fecha_inicio, m.fecha_fin, m.estado
+          FROM Membresia m
+          JOIN TipoMembresia t ON t.id_tipo_membresia = m.id_tipo_membresia
+          WHERE m.id_cliente = @id_cliente
+          ORDER BY m.fecha_fin DESC`);
+      return res.json({
+        activa: false,
+        mensaje: 'No tienes una membresía vigente',
+        ultima: ultima.recordset[0] || null,
+      });
     }
     const membresia = actual.recordset[0];
 
@@ -80,6 +92,9 @@ router.get('/membresia', async (req, res) => {
     responderErrorSql(res, error, 'No se pudo consultar tu membresía');
   }
 });
+
+// Desde aquí, las rutas exigen membresía al día (acceso completo)
+router.use(soloAccesoCompleto);
 
 // GET /cliente/asistencias?limite=30
 // Sus últimas entradas al gimnasio (por defecto 30, máximo 100).
@@ -165,7 +180,7 @@ router.get('/rutinas/:id', async (req, res) => {
         WHERE d.id_rutina = @id_rutina
         ORDER BY d.numero_dia, b.orden, se.numero_serie`);
 
-    // 3. Agrupar: cada día con sus ejercicios, cada ejercicio con sus series
+    // Agrupar: cada día con sus ejercicios, cada ejercicio con sus series
     const dias = [];
     for (const fila of filas.recordset) {
       let dia = dias.find((d) => d.id_dia_rutina === fila.id_dia_rutina);
