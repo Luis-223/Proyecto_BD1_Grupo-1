@@ -18,10 +18,12 @@ export default function Index() {
   const [modoRegistro, setModoRegistro] = useState(false);
 
 
-  const toggleMode = () => {
-    setModoRegistro((prev) => !prev);
-  };
+  
+  const crearCuenta = () => {
+    router.push({ pathname: '/sign_up' });
+    return;
 
+  }
   const iniciarSesion = async () => {
     if (SALTAR_LOGIN) {
       router.push({ pathname: '/perfil', params: { correo: correo || 'invitado@fitmanager.com' } });
@@ -62,8 +64,8 @@ export default function Index() {
         <Button title="Iniciar sesión" onPress={iniciarSesion} />
       </View>
 
-      <Text style={styles.link} onPress={toggleMode}>
-        {modoRegistro ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+      <Text style={styles.link} onPress={crearCuenta}>
+        { '¿No tienes cuenta? Regístrate'}
       </Text>
 
       <Text style={styles.mensaje}>{mensaje}</Text>
@@ -76,7 +78,7 @@ const styles = StyleSheet.create({
   titulo: { fontSize: 28, fontWeight: 'bold', marginBottom: 24, textAlign: 'center', color: '#5e5f5f' },
   logo: { width: 300, height: 100, alignSelf: 'center', marginBottom: 5, resizeMode: 'contain' },
   input: { borderWidth: 1, borderColor: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#ffffff' },
-  botones: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, borderRadius: 12 },
+  botones: { flexDirection: 'row', justifyContent: 'center', marginTop: 8, borderRadius: 12 },
   link: { marginTop: 12, textAlign: 'center', color: '#5eb4ff', textDecorationLine: 'underline' },
   mensaje: { marginTop: 16, textAlign: 'center', color: '#ffffff' },
 });
