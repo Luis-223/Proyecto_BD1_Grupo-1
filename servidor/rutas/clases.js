@@ -8,11 +8,10 @@
 // incluya clases. Si algo falla, la app recibe el mensaje de la base.
 const express = require('express');
 const { sql, conectar, responderErrorSql } = require('../db');
-const { verificarToken, soloClientes } = require('../seguridad');
+const { verificarToken, soloClientes, soloAccesoCompleto } = require('../seguridad');
 
 const router = express.Router();
-router.use(verificarToken, soloClientes); // todas necesitan token y ser cliente
-
+router.use(verificarToken, soloClientes, soloAccesoCompleto); // token, ser cliente y membresía al día
 // GET /clases?sucursal=2
 // Próximas clases de su sucursal (u otra si manda ?sucursal=).
 // Incluye cupos disponibles, si ya está inscrito y si su membresía

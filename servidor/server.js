@@ -48,6 +48,7 @@ app.get('/salud', async (req, res) => {
 });
 
 //RUTAS DE CADA SECCIÓN (cada archivo está en la carpeta rutas)
+app.use('/trama', require('./rutas/trama')); // TRAMAS: lo que usa la app (FM|1|...)
 app.use('/auth', require('./rutas/auth')); // inicio de sesión y palabra clave
 app.use('/cliente', require('./rutas/cliente')); // membresía, rutinas, metas, notificaciones
 app.use('/clases', require('./rutas/clases')); // clases grupales e inscripción
