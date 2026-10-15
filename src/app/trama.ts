@@ -1,3 +1,10 @@
+// =============================================================
+// trama.ts — ARMAR Y LEER TRAMAS (protocolo FM del servidor)
+// Pedido:    FM|1|LOGIN_REQ|<idMensaje>|<alias>|<contraseña>
+// Respuesta: FM|1|LOGIN_RES|<idMensaje>|<código>|<detalle>|<idUsuario>|<nombre>|<rol>|<token>|<acceso>
+// código 00 = todo bien. Otro código = el detalle explica qué pasó.
+// =============================================================
+
 const PROTOCOLO = 'FM';
 const VERSION = '1';
 const SEP = '|';
@@ -9,6 +16,8 @@ export type RespuestaLogin = {
   idUsuario: string;
   nombre: string;
   rol: string;
+  token: string; // NUEVO: se manda en las siguientes tramas para probar quién es
+  acceso: string; // NUEVO: COMPLETO, o LIMITADO si la membresía venció
 };
 
 let contador = 1000;
@@ -36,5 +45,7 @@ export function leerLoginRes(trama: string): RespuestaLogin {
     idUsuario: c[6],
     nombre: c[7],
     rol: c[8],
+    token: c[9] ?? '', // NUEVO (posición 9)
+    acceso: c[10] ?? '', // NUEVO (posición 10)
   };
 }

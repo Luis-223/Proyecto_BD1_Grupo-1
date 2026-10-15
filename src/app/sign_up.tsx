@@ -13,7 +13,7 @@ type Usuario = {
 // true = entra directo sin verificar (solo para pruebas, sin base de datos)
 const SALTAR_LOGIN = true;
 export default function sign_up() {
-
+  const router = useRouter();
   const [paso, setPaso] = useState<number>(1);
   const [mostrarDatePicker, setMostrarDatePicker] = useState<boolean>(false);
 
@@ -81,7 +81,7 @@ export default function sign_up() {
       setMensaje('Este alias ya está registrado');
     } 
   };*/
-  /*const siguiente1 = () => {
+  /*const crearUsuario = () => {
     if (!setAliasUsuario || !setContrasena1) {
       setMensaje('Completa ambos campos');
     } else if (setAliasUsuario.some((u) => u.setAliasUsuario === setAliasUsuario)) {
@@ -91,7 +91,26 @@ export default function sign_up() {
     }
   };
   */
-  const iniciarSesion1 = () => {}
+ /*switch (paso) {
+    case 1:
+      if (!aliasUsuario || !contrasena1) {
+        setMensaje('Completa ambos campos');
+      }
+      return (0);
+    case 2:
+
+      return (0);
+    case 3:
+
+      return (0);
+ }
+*/
+
+  const iniciarSesion1 = () => {
+    router.push('/');
+    return;
+  }
+
   return (
     <View style={styles.container}>
       <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />

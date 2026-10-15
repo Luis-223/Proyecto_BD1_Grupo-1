@@ -46,7 +46,7 @@ export default function Index() {
 
       <TextInput
         style={styles.input}
-        placeholder="Correo"
+        placeholder="Alias o Correoelectronico"
         value={correo}
         onChangeText={setCorreo}
         autoCapitalize="none"
