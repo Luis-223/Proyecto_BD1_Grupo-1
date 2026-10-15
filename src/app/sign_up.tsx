@@ -95,7 +95,7 @@ export default function sign_up() {
   return (
     <View style={styles.container}>
       <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
-   <ScrollView horizontal={false} showsVerticalScrollIndicator={true} contentContainerStyle={styles.container} scrollEnabled={true} style={[styles.scrollBase, paso !== 1 && styles.oculto]}>
+   <ScrollView horizontal={false} showsVerticalScrollIndicator={true} contentContainerStyle={styles.scrollContent}  style={[styles.scrollBase, paso !== 1 && styles.oculto]}>
   {/* Contenido del primer ScrollView */}
 
       <TextInput
@@ -137,8 +137,7 @@ export default function sign_up() {
     <ScrollView
         horizontal={false}
         showsVerticalScrollIndicator={true}
-        contentContainerStyle={styles.container}
-        scrollEnabled={true}
+        contentContainerStyle={styles.scrollContent}
        style={[styles.scrollBase, paso !== 2 && styles.oculto]} // Tenía la condición incorrecta // Oculto si paso no es 2
       >
         
@@ -255,10 +254,10 @@ export default function sign_up() {
       {/*-------------------------------------------------------------------------------------------------------------------  */}
       {/*-------------------------------------------------------------------------------------------------------------------  */}
       <ScrollView
-        horizontal={true}
+        horizontal={false}
         showsVerticalScrollIndicator={true}
-        contentContainerStyle={styles.container}
-        scrollEnabled={true}
+        contentContainerStyle={styles.scrollContent}
+        
        style={[styles.scrollBase, paso !== 3 && styles.oculto]} // Tenía la condición incorrecta // Oculto si paso no es 2
       >
         <RadioButton.Group onValueChange={newValue => setMetodoPago(newValue)} value={metodoPago}>
@@ -380,7 +379,8 @@ export default function sign_up() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor:'#020700' , padding: 14},
   oculto: {display: 'none',},  
-  scrollBase: {flex: 1,},
+  scrollBase: {  flex: 1,},
+  scrollContent: {  padding: 14,  paddingBottom: 60, },
   titulo: { fontSize: 28, fontWeight: 'bold', marginBottom: 24, textAlign: 'center', color: '#5e5f5f' },
   logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5,resizeMode: 'contain'},
   input: { borderWidth: 1, borderColor: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12,backgroundColor:'#ffffff' },
