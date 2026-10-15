@@ -1,56 +1,87 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Button, Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { loginPorTrama } from './conexion';
+import { guardarSesion } from './sesion';
 
-type Usuario = {
-  correo: string;
-  contrasena: string;
-};
 
-const SALTAR_LOGIN = true;
+const SALTAR_LOGIN = false; 
 
 export default function Index() {
   const router = useRouter();
-  const [usuariosRegistrados, setUsuariosRegistrados] = useState<Usuario[]>([]);
-  const [correo, setCorreo] = useState('');
+  const [alias, setAlias] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [mensaje, setMensaje] = useState('');
-  const [modoRegistro, setModoRegistro] = useState(false);
+  const [cargando, setCargando] = useState(false);
 
-
-  
+  // Redirecciona a tu formulario multi-pasos
   const crearCuenta = () => {
     router.push({ pathname: '/sign_up' });
-    return;
+  };
 
-  }
   const iniciarSesion = async () => {
+    // Modo de pruebas directo
     if (SALTAR_LOGIN) {
-      router.push({ pathname: '/perfil', params: { correo: correo || 'invitado@fitmanager.com' } });
+      router.push({ 
+        pathname: '/perfil', 
+        params: { nombre: alias || 'Invitado', rol: 'TEST', acceso: 'FULL' } 
+      });
       return;
     }
 
-    // Nota: Asegúrate de tener definida la función validarLogin si desactivas SALTAR_LOGIN
-    const valido = false; // Placeholder si no está creada aún
-    if (valido) {
-      setMensaje('');
-      router.push({ pathname: '/perfil', params: { correo } });
-    } else {
-      setMensaje('Correo o contraseña incorrectos');
+    if (!alias.trim() || !contrasena) {
+      setMensaje('Escribe tu usuario y tu contraseña');
+      return;
+    }
+
+    setCargando(true);
+    setMensaje('');
+
+    try {
+      const res = await loginPorTrama(alias.trim(), contrasena);
+      
+      if (res.codigo !== '00') {
+        setMensaje(res.detalle); // Muestra el mensaje de error retornado por el servidor
+        return;
+      }
+
+      guardarSesion({
+        token: res.token,
+        idUsuario: res.idUsuario,
+        nombre: res.nombre,
+        rol: res.rol,
+        acceso: res.acceso,
+      });
+
+      setContrasena(''); // Limpia la contraseña por seguridad
+
+      router.push({
+        pathname: '/perfil',
+        params: { nombre: res.nombre, rol: res.rol, acceso: res.acceso },
+      });
+    } catch (e) {
+      setMensaje('No se pudo conectar con el servidor');
+    } finally {
+      setCargando(false);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
+      <Image 
+        source={require('../../assets/images/Banner.jpeg')} 
+        style={styles.logo} 
+      />
 
       <TextInput
         style={styles.input}
-        placeholder="Alias o Correoelectronico"
-        value={correo}
-        onChangeText={setCorreo}
+        placeholder="Usuario / Alias"
+        value={alias}
+        onChangeText={setAlias}
         autoCapitalize="none"
+        autoCorrect={false}
       />
+      
       <TextInput
         style={styles.input}
         placeholder="Contraseña"
@@ -60,25 +91,66 @@ export default function Index() {
       />
 
       <View style={styles.botones}>
-        
-        <Button title="Iniciar sesión" onPress={iniciarSesion} />
+        <Button
+          title={cargando ? 'Entrando...' : 'Iniciar sesión'}
+          onPress={iniciarSesion}
+          disabled={cargando}
+        />
       </View>
 
       <Text style={styles.link} onPress={crearCuenta}>
-        { '¿No tienes cuenta? Regístrate'}
+        ¿No tienes cuenta? Regístrate
       </Text>
 
-      <Text style={styles.mensaje}>{mensaje}</Text>
+      {mensaje ? <Text style={styles.mensaje}>{mensaje}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#020700' },
-  titulo: { fontSize: 28, fontWeight: 'bold', marginBottom: 24, textAlign: 'center', color: '#5e5f5f' },
-  logo: { width: 300, height: 100, alignSelf: 'center', marginBottom: 5, resizeMode: 'contain' },
-  input: { borderWidth: 1, borderColor: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#ffffff' },
-  botones: { flexDirection: 'row', justifyContent: 'center', marginTop: 8, borderRadius: 12 },
-  link: { marginTop: 12, textAlign: 'center', color: '#5eb4ff', textDecorationLine: 'underline' },
-  mensaje: { marginTop: 16, textAlign: 'center', color: '#ffffff' },
+  container: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    padding: 24, 
+    backgroundColor: '#020700' 
+  },
+  titulo: { 
+    fontSize: 28, 
+    fontWeight: 'bold', 
+    marginBottom: 24, 
+    textAlign: 'center', 
+    color: '#5e5f5f' 
+  },
+  logo: { 
+    width: 300, 
+    height: 100, 
+    alignSelf: 'center', 
+    marginBottom: 15, 
+    resizeMode: 'contain' 
+  },
+  input: { 
+    borderWidth: 1, 
+    borderColor: '#ffffff', 
+    borderRadius: 8, 
+    padding: 12, 
+    marginBottom: 12, 
+    backgroundColor: '#ffffff' 
+  },
+  botones: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    marginTop: 8, 
+    borderRadius: 12 
+  },
+  link: { 
+    marginTop: 16, 
+    textAlign: 'center', 
+    color: '#5eb4ff', 
+    textDecorationLine: 'underline' 
+  },
+  mensaje: { 
+    marginTop: 16, 
+    textAlign: 'center', 
+    color: '#ff4d4d' 
+  },
 });

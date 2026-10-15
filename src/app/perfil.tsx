@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ReactNode, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { guardarSesion } from '../../services/sesion'; // NUEVO
 
 type Item = { icono: string; titulo: string };
 
@@ -28,11 +29,13 @@ const menuExtra: Item[] = [
 
 export default function Perfil() {
   const router = useRouter();
-  const { correo } = useLocalSearchParams<{ correo: string }>();
+  // CAMBIO: el login ahora manda nombre, rol y acceso (antes mandaba el correo)
+  const { nombre: nombreSesion, rol, acceso } = useLocalSearchParams<{ nombre: string; rol: string; acceso: string }>();
+  const membresiaVencida = acceso === 'LIMITADO'; // NUEVO
   const [verMas, setVerMas] = useState(false);
 
-  // Datos de prueba: luego vendrán de la API / SQL Server
-  const nombre = correo ? correo.split('@')[0] : 'Usuario';
+  const nombre = nombreSesion || 'Usuario'; // CAMBIO: nombre real del servidor
+  // Datos de prueba: luego vendrán del servidor (trama MEMBRESIA)
   const datos = { membresia: 'Oro', sucursal: 'Chimaltenango', vence: '30/11/2026' };
 
   const abrir = (titulo: string) => console.log('Abrir:', titulo);
@@ -53,9 +56,16 @@ export default function Perfil() {
         </View>
       </View>
 
+      {/* NUEVO: aviso de membresía vencida (acceso LIMITADO) */}
+      {membresiaVencida && (
+        <View style={styles.aviso}>
+          <Text style={styles.avisoTexto}>Tu membresía venció. Renuévala para usar todas las secciones.</Text>
+        </View>
+      )}
+
       {/* Datos de la persona */}
       <View style={styles.tarjetaDatos}>
-        <Fila etiqueta="Correo" valor={correo ?? '-'} />
+        <Fila etiqueta="Rol" valor={rol ?? '-'} />
         <Fila etiqueta="Sucursal" valor={datos.sucursal} />
         <Fila etiqueta="Vence" valor={datos.vence} />
       </View>
@@ -96,7 +106,7 @@ export default function Perfil() {
 
       <Seccion icono="⚙️" titulo="Configuración y privacidad">
         <FilaMenu item={{ icono: '🔑', titulo: 'Cambiar contraseña' }} onPress={() => abrir('Cambiar contraseña')} />
-        <FilaMenu item={{ icono: '🚪', titulo: 'Cerrar sesión' }} onPress={() => router.back()} />
+        <FilaMenu item={{ icono: '🚪', titulo: 'Cerrar sesión' }} onPress={() => { cerrarSesion(); router.back(); }} />
       </Seccion>
     </ScrollView>
   );
@@ -167,4 +177,7 @@ const styles = StyleSheet.create({
 
   seccionDesplegable: { borderTopWidth: 1, borderTopColor: '#2a2a2a' },
   seccionCabecera: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16 },
+
+  aviso: { backgroundColor: '#3a2a00', borderRadius: 12, padding: 12, marginTop: 12 },
+  avisoTexto: { color: '#ffd166', fontSize: 14, fontWeight: '600' },
 });
