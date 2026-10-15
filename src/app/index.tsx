@@ -60,7 +60,8 @@ export default function Index() {
         params: { nombre: res.nombre, rol: res.rol, acceso: res.acceso },
       });
     } catch (e) {
-      setMensaje('No se pudo conectar con el servidor');
+      console.log(e);
+    setMensaje('Error: ' + (e instanceof Error ? e.message : 'desconocido'));
     } finally {
       setCargando(false);
     }

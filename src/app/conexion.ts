@@ -1,36 +1,46 @@
 // =============================================================
 // conexion.ts — MANDAR TRAMAS AL SERVIDOR
-// Busca solo la dirección del servidor:
-//   - En el navegador (npm run web): usa el mismo equipo (localhost).
-//   - En el celular con Expo Go: usa la IP de la PC donde corre Expo,
-//     que es la misma PC donde corre el servidor.
-// Si el servidor está en OTRA PC, escriban su IP en IP_SERVIDOR_FIJA.
 // =============================================================
 
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { construirLoginReq, leerLoginRes, nuevoIdMensaje, RespuestaLogin } from './trama';
 
-const PUERTO_SERVIDOR = 3000; // el puerto del servidor (PORT en su .env)
-const IP_SERVIDOR_FIJA = ''; // ej. '192.168.1.25'. Vacío = detectar sola
-const ESPERA_MAXIMA_MS = 10000; // 10 segundos sin respuesta = error
+const PUERTO_SERVIDOR = 3000; // Puerto del servidor backend
+const IP_SERVIDOR_FIJA = '192.168.1.9'; // Tu IP de red Wi-Fi local
+const ESPERA_MAXIMA_MS = 30000; // 30 segundos de tiempo límite para desarrollo
 
 function hostDelServidor(): string {
-  if (IP_SERVIDOR_FIJA) return IP_SERVIDOR_FIJA;
-  // Navegador: el servidor está en la misma PC
-  if (Platform.OS === 'web' && typeof window !== 'undefined') return window.location.hostname;
-  // Expo Go: hostUri se ve como "192.168.1.10:8081" -> nos quedamos con la IP
+  // 1. Si se definió una IP fija para Wi-Fi y no estamos en web
+  if (IP_SERVIDOR_FIJA && Platform.OS !== 'web') {
+    return IP_SERVIDOR_FIJA;
+  }
+
+  // 2. Navegador Web: el servidor está en la misma máquina
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.hostname;
+  }
+
+  // 3. Expo Go (Detecta la IP dinámica proporcionada por Expo)
   const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) return hostUri.split(':')[0];
+  if (hostUri) {
+    return hostUri.split(':')[0];
+  }
+
+  // 4. Emulador de Android estándar por defecto
+  if (Platform.OS === 'android') {
+    return '10.0.2.2';
+  }
+
   return 'localhost';
 }
 
 export const URL_SERVIDOR = `http://${hostDelServidor()}:${PUERTO_SERVIDOR}/trama`;
 
 async function enviarTrama(trama: string): Promise<string> {
-  // Si el servidor no responde en 10 segundos, se cancela
   const control = new AbortController();
   const temporizador = setTimeout(() => control.abort(), ESPERA_MAXIMA_MS);
+
   try {
     const respuesta = await fetch(URL_SERVIDOR, {
       method: 'POST',
@@ -38,7 +48,17 @@ async function enviarTrama(trama: string): Promise<string> {
       body: trama,
       signal: control.signal,
     });
+
+    if (!respuesta.ok) {
+      throw new Error(`Respuesta del servidor no exitosa (Status: ${respuesta.status})`);
+    }
+
     return await respuesta.text();
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw new Error(`Tiempo de espera agotado (${ESPERA_MAXIMA_MS / 1000}s). Verifica que el servidor en ${URL_SERVIDOR} esté activo.`);
+    }
+    throw new Error(`No se pudo conectar al servidor en ${URL_SERVIDOR}. Verifica la conexión.`);
   } finally {
     clearTimeout(temporizador);
   }
@@ -49,6 +69,10 @@ export async function loginPorTrama(alias: string, contrasena: string): Promise<
   const trama = construirLoginReq(alias, contrasena, id);
   const textoRespuesta = await enviarTrama(trama);
   const res = leerLoginRes(textoRespuesta);
-  if (res.idMensaje !== id) throw new Error('La respuesta no corresponde a la solicitud');
+
+  if (res.idMensaje !== id) {
+    throw new Error('La respuesta recibida no corresponde a la solicitud realizada');
+  }
+
   return res;
 }

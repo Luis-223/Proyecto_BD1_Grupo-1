@@ -1,14 +1,13 @@
+// =============================================================
 // server.js — ARCHIVO PRINCIPAL DEL SERVIDOR
-// Aquí se arma el servidor: se cargan las herramientas, se conectan
-// las rutas de cada sección y se enciende en el puerto del .env.
-// Las rutas en sí viven en la carpeta "rutas".
+// =============================================================
 require('dotenv').config(); // 1. Cargar el .env ANTES que todo lo demás
 
 // HERRAMIENTAS
-const express = require('express'); // el servidor web
-const cors = require('cors'); // permite que la app (otro dispositivo) se conecte
+const express = require('express'); // El servidor web
+const cors = require('cors'); // Permite que la app (otro dispositivo) se conecte
 const http = require('http'); // Socket.io necesita el servidor http "puro"
-const { Server } = require('socket.io'); // tiempo real
+const { Server } = require('socket.io'); // Tiempo real
 const { conectar } = require('./db');
 const { configurarSocket } = require('./socket');
 
@@ -18,24 +17,35 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
-//CREAR EL SERVIDOR
+// CREAR EL SERVIDOR
 const app = express();
-app.use(express.json()); // entender datos JSON que manda la app
-app.use(cors()); // aceptar peticiones de la app móvil
+
+// MIDDLEWARES DE LECTURA Y SEGURIDAD
+app.use(cors()); // Aceptar peticiones de la app móvil
+app.use(express.json()); // Entender datos JSON
+app.use(express.text({ type: ['text/plain', 'text/*'] })); // OPTIMIZACIÓN: Permite procesar de inmediato las tramas de texto
+
+// OPTIMIZACIÓN DE RESPUESTA RÁPIDA EN TRAMAS (Evita delay de socket/Keep-Alive)
+app.use('/trama', (req, res, next) => {
+  res.setHeader('Connection', 'close'); // Fuerza el cierre del canal al responder
+  if (req.socket) {
+    req.socket.setNoDelay(true); // Desactiva el algoritmo de Nagle para despacho inmediato de bytes TCP
+  }
+  next();
+});
 
 const servidorHttp = http.createServer(app);
 const io = new Server(servidorHttp, { cors: { origin: '*' } });
 configurarSocket(io);
-app.set('io', io); // así las rutas pueden mandar avisos en tiempo real
+app.set('io', io); // Así las rutas pueden mandar avisos en tiempo real
 
-
-//RUTAS DE PRUEBA
-// GET /  -> confirma que el servidor está encendido
+// RUTAS DE PRUEBA
+// GET / -> Confirma que el servidor está encendido
 app.get('/', (req, res) => {
   res.send('¡El servidor de FitManager está funcionando!');
 });
 
-// GET /salud -> confirma que el servidor llega a la base de datos
+// GET /salud -> Confirma que el servidor llega a la base de datos
 app.get('/salud', async (req, res) => {
   try {
     const pool = await conectar();
@@ -47,30 +57,46 @@ app.get('/salud', async (req, res) => {
   }
 });
 
-//RUTAS DE CADA SECCIÓN (cada archivo está en la carpeta rutas)
+// RUTAS DE CADA SECCIÓN
 app.use('/trama', require('./rutas/trama')); // TRAMAS: lo que usa la app (FM|1|...)
-app.use('/auth', require('./rutas/auth')); // inicio de sesión y palabra clave
-app.use('/cliente', require('./rutas/cliente')); // membresía, rutinas, metas, notificaciones
-app.use('/clases', require('./rutas/clases')); // clases grupales e inscripción
+app.use('/auth', require('./rutas/auth')); // Inicio de sesión y palabra clave
+app.use('/cliente', require('./rutas/cliente')); // Membresía, rutinas, metas, notificaciones
+app.use('/clases', require('./rutas/clases')); // Clases grupales e inscripción
 
-//ERRORES GENERALES
+// ERRORES GENERALES
 // Ruta que no existe
 app.use((req, res) => {
   res.status(404).json({ error: `No existe la ruta ${req.method} ${req.originalUrl}` });
 });
 
-// JSON mal escrito o cualquier error no previsto
+// JSON o formato mal escrito
 app.use((error, req, res, next) => {
   if (error.type === 'entity.parse.failed') {
-    return res.status(400).json({ error: 'El JSON enviado no es válido' });
+    return res.status(400).json({ error: 'El formato de los datos enviados no es válido' });
   }
   console.error(error);
   res.status(500).json({ error: 'Error inesperado en el servidor' });
 });
 
-//ENCENDER EL SERVIDOR
-// '0.0.0.0' = acepta conexiones de otros equipos de la red (la app)
+// ENCENDER EL SERVIDOR Y PRECALENTAR CONEXIÓN A BASE DE DATOS
 const PUERTO = Number(process.env.PORT) || 3000;
-servidorHttp.listen(PUERTO, '0.0.0.0', () => {
-  console.log(`Servidor FitManager corriendo en http://localhost:${PUERTO}`);
-});
+
+async function arrancarServidor() {
+  try {
+    // Inicializar pool de base de datos desde el arranque
+    await conectar();
+    console.log('Conexión inicial a la Base de Datos establecida.');
+
+    servidorHttp.listen(PUERTO, '0.0.0.0', () => {
+      console.log(`Servidor FitManager corriendo en http://localhost:${PUERTO}`);
+    });
+  } catch (err) {
+    console.error('Error al conectar a la Base de Datos al iniciar:', err);
+    // Arrancar el servidor HTTP aun si falla la BD para permitir diagnóstico
+    servidorHttp.listen(PUERTO, '0.0.0.0', () => {
+      console.log(`Servidor iniciado en puerto ${PUERTO} (Sin conexión a BD)`);
+    });
+  }
+}
+
+arrancarServidor();
