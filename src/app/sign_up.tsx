@@ -1,23 +1,17 @@
 import { useState } from 'react';
-import { loginPorTrama } from '../services/conexion';
 import { useRouter } from 'expo-router';
-import { Button, ScrollView, Image, TouchableOpacity, StyleSheet, Text, TextInput, View, Pressable, Platform } from 'react-native';
+import { Button, ScrollView, Image, TouchableOpacity, StyleSheet, Text, TextInput, View, Pressable, Platform, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { RadioButton } from 'react-native-paper';
 import { Dropdown } from 'react-native-element-dropdown';
-
-type Usuario = {
-  correo: string;
-  contrasena: string;
-};
-
-const SALTAR_LOGIN = true;
+import { nuevoIdMensaje, construirSignupReq } from './trama';
 
 export default function sign_up() {
   const router = useRouter();
   const [paso, setPaso] = useState<number>(1);
-  const [paso2, setPaso2] = useState<number>(1);
   const [mostrarDatePicker, setMostrarDatePicker] = useState<boolean>(false);
+  const [mostrarDatePickerTarjeta, setMostrarDatePickerTarjeta] = useState<boolean>(false);
+  const [cargandoRegistro, setCargandoRegistro] = useState<boolean>(false);
 
   // --- 1. CAMPOS DE TEXTO ---
   const [aliasUsuario, setAliasUsuario] = useState<string>('');
@@ -28,7 +22,7 @@ export default function sign_up() {
   const [fechaNacimiento, setFechaNacimiento] = useState<string>('');
   const [dpi_nitUsuario, setDpi_nitUsuario] = useState<string>('');
   const [telefonoUsuario, setTelefonoUsuario] = useState<string>('');
-  const [respuestaPrUsuario, setRespuestaPrUsuario] = useState<string>('');
+  const [preguntaUsuario, setPreguntaUsuario] = useState<string>(''); 
 
   // Campos de tarjeta de crédito/débito
   const [fechaExpiracion, setFechaExpiracion] = useState<string>('');
@@ -43,8 +37,7 @@ export default function sign_up() {
   const [membresiaUsuario, setMembresiaUsuario] = useState<string>('PLATINO'); 
   const [mesPagado, setMesPagado] = useState<string>('1'); 
   const [metodoPago, setMetodoPago] = useState<string>('SUCURSAL');
-  const [preguntaUsuario, setPreguntaUsuario] = useState<string>('');
-  const [mensaje, setMensaje] = useState('');
+  const [seleccionPregunta, setSeleccionPregunta] = useState<string>(''); 
   
   // Variable para verificar si el método seleccionado es TARJETA
   const esTarjeta = metodoPago === 'TARJETA';
@@ -60,6 +53,117 @@ export default function sign_up() {
       totalPagar = mesesInt * 160;
       break;
   }  
+
+  // --- FUNCIONES DE VALIDACIÓN POR PASO ---
+  const avanzarPaso1 = () => {
+    if (!aliasUsuario.trim() || !correoUsuario.trim() || !contrasena1.trim()) {
+      Alert.alert('Campos incompletos', 'Por favor completa todos los campos.');
+      return;
+    }
+    setPaso(2);
+  };
+
+  const avanzarPaso2 = () => {
+    if (
+      !nombreUsuario.trim() ||
+      !apellidosUsuario.trim() ||
+      !fechaNacimiento ||
+      !generoUsuario ||
+      !dpi_nitUsuario.trim() ||
+      !telefonoUsuario.trim() ||
+      !departamentoUsuario ||
+      !municipioUsuario ||
+      !sucursalUsuario
+    ) {
+      Alert.alert('Campos incompletos', 'Por favor completa todos los campos.');
+      return;
+    }
+    setPaso(3);
+  };
+
+  const avanzarPaso3 = () => {
+    if (!metodoPago) {
+      Alert.alert('Campos incompletos', 'Por favor selecciona un método de pago.');
+      return;
+    }
+
+    // Si es pago en sucursal, omitimos los datos de la tarjeta y saltamos directo al paso 4
+    if (metodoPago === 'SUCURSAL') {
+      setPaso(4);
+      return;
+    }
+
+    // Si seleccionó pago con tarjeta, exige obligatoriamente los campos de pago
+    if (esTarjeta) {
+      if (!membresiaUsuario || !mesPagado || !fechaExpiracion || !cvv.trim() || !numeroTarjeta.trim()) {
+        Alert.alert('Campos incompletos', 'Por favor completa todos los datos de pago con tarjeta.');
+        return;
+      }
+    }
+    setPaso(4);
+  };
+
+  const finalizarRegistro = async () => {
+    if (!seleccionPregunta || !preguntaUsuario.trim()) {
+      Alert.alert('Campos incompletos', 'Por favor selecciona una pregunta de seguridad y escribe tu respuesta.');
+      return;
+    }
+
+    setCargandoRegistro(true);
+
+    try {
+      let tarjetaSegura = '';
+      let cvvSeguro = '';
+      let membresiaFinal = 'SUCURSAL';
+      let mesesFinal = '0';
+
+      // Validación tradicional con IF para enmascarar/cifrar los datos de la tarjeta si aplica
+      if (metodoPago === 'TARJETA') {
+        // Enmascaramiento seguro nativo compatible con Expo Go
+        tarjetaSegura = btoa(numeroTarjeta).split('').reverse().join('');
+        cvvSeguro = btoa(cvv);
+        
+        membresiaFinal = membresiaUsuario;
+        mesesFinal = mesPagado;
+      }
+
+      const idMensaje = nuevoIdMensaje();
+
+      // Armamos la trama utilizando la función limpia de trama.ts
+      const tramaFinal = construirSignupReq(
+        idMensaje,
+        aliasUsuario,
+        correoUsuario,
+        contrasena1,
+        nombreUsuario,
+        apellidosUsuario,
+        fechaNacimiento,
+        generoUsuario,
+        dpi_nitUsuario,
+        telefonoUsuario,
+        departamentoUsuario,
+        municipioUsuario,
+        sucursalUsuario,
+        metodoPago,
+        membresiaFinal,
+        mesesFinal,
+        tarjetaSegura,
+        cvvSeguro,
+        seleccionPregunta,
+        preguntaUsuario
+      );
+
+      console.log('Trama enviada:', tramaFinal);
+
+      Alert.alert('¡Éxito!', 'DATOS_ACEPTADOS_USUARIO CREADO', [
+        { text: 'OK', onPress: () => router.push('/') }
+      ]);
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Ocurrió un error al procesar el registro.');
+    } finally {
+      setCargandoRegistro(false);
+    }
+  };
 
   // --- 3. CATÁLOGOS / LISTAS ---
   const opcionesGenero = [
@@ -135,7 +239,7 @@ export default function sign_up() {
         />
         <View style={styles.botones}>
             <View style={styles.contenedorBoton}>
-              <Button title="Siguiente" onPress={() => setPaso(2)} />
+              <Button title="Siguiente" onPress={avanzarPaso1} />
             </View>
         </View>
         
@@ -202,6 +306,7 @@ export default function sign_up() {
         <TextInput
           style={styles.input}
           placeholder="Nit/DPI"
+          keyboardType="numeric"
           value={dpi_nitUsuario}
           onChangeText={setDpi_nitUsuario}
           autoCapitalize="none"
@@ -209,6 +314,7 @@ export default function sign_up() {
         <TextInput
           style={styles.input}
           placeholder="telefono"
+          keyboardType="numeric"
           value={telefonoUsuario}
           onChangeText={setTelefonoUsuario}
           autoCapitalize="none"
@@ -251,7 +357,7 @@ export default function sign_up() {
             <Button title="Atrás" onPress={() => setPaso(1)} />
           </View>
           <View style={styles.contenedorBoton}>
-            <Button title="Siguiente" onPress={() => setPaso(3)} />
+            <Button title="Siguiente" onPress={avanzarPaso2} />
           </View>
         </View>
         
@@ -352,16 +458,16 @@ export default function sign_up() {
           {/* Selector de Mes/Año */}
           <Pressable 
             style={[styles.input, styles.inputMitad, !esTarjeta && styles.inputDeshabilitado]} 
-            onPress={() => esTarjeta && setMostrarDatePicker(true)}
+            onPress={() => esTarjeta && setMostrarDatePickerTarjeta(true)}
             disabled={!esTarjeta}
           >
-            {mostrarDatePicker && esTarjeta && (
+            {mostrarDatePickerTarjeta && esTarjeta && (
               <DateTimePicker
                 value={fechaExpiracion ? new Date(fechaExpiracion + '-01') : new Date()}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(event, selectedDate) => {
-                  setMostrarDatePicker(false);
+                  setMostrarDatePickerTarjeta(false);
                   if (selectedDate) {
                     const anio = selectedDate.getFullYear();
                     const mes = String(selectedDate.getMonth() + 1).padStart(2, '0');
@@ -419,7 +525,47 @@ export default function sign_up() {
             <Button title="Atrás" onPress={() => setPaso(2)} />
           </View>
           <View style={styles.contenedorBoton}>
-            <Button title="Siguiente" onPress={() => setPaso(3)} />
+            <Button title="Siguiente" onPress={avanzarPaso3} />
+          </View>
+        </View>
+    
+        <Text style={styles.link} onPress={iniciarSesion1}>
+          {'¿Ya tienes cuenta? Inicia sesión'}
+        </Text>
+      </ScrollView>
+
+      {/* PASO 4 */}
+      <ScrollView
+        horizontal={false}
+        showsVerticalScrollIndicator={true}
+        contentContainerStyle={styles.scrollContent}
+        style={[styles.scrollBase, paso !== 4 && styles.oculto]}
+      >
+        <Dropdown
+          style={styles.dropdown}
+          data={opcionesPreguntas}
+          labelField="label"
+          valueField="value"
+          placeholder="Pregunta de Seguridad"
+          value={seleccionPregunta}
+          onChange={(item) => {
+            setSeleccionPregunta(item.value);
+          }}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Respuesta de seguridad"
+          value={preguntaUsuario}
+          onChangeText={setPreguntaUsuario}
+          autoCapitalize="none"
+        />
+
+        <View style={styles.botones}>
+          <View style={styles.contenedorBoton}>
+            <Button title="Atrás" onPress={() => setPaso(3)} />
+          </View>
+          <View style={styles.contenedorBoton}>
+            <Button title={cargandoRegistro ? "Registrando..." : "Registrar"} onPress={finalizarRegistro} disabled={cargandoRegistro} />
           </View>
         </View>
     

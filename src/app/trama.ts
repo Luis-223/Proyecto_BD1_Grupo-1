@@ -1,12 +1,9 @@
 // =============================================================
 // trama.ts — ARMAR Y LEER TRAMAS (protocolo FM del servidor)
-// Pedido:    FM|1|LOGIN_REQ|<idMensaje>|<alias>|<contraseña>
-// Respuesta: FM|1|LOGIN_RES|<idMensaje>|<código>|<detalle>|<idUsuario>|<nombre>|<rol>|<token>|<acceso>
-// código 00 = todo bien. Otro código = el detalle explica qué pasó.
 // =============================================================
 
 const PROTOCOLO = 'FM';
-const VERSION = '1';
+const VERSION = '2'; // Versión actualizada para el registro
 const SEP = '|';
 
 export type RespuestaLogin = {
@@ -16,8 +13,8 @@ export type RespuestaLogin = {
   idUsuario: string;
   nombre: string;
   rol: string;
-  token: string; // NUEVO: se manda en las siguientes tramas para probar quién es
-  acceso: string; // NUEVO: COMPLETO, o LIMITADO si la membresía venció
+  token: string;
+  acceso: string;
 };
 
 let contador = 1000;
@@ -45,7 +42,61 @@ export function leerLoginRes(trama: string): RespuestaLogin {
     idUsuario: c[6],
     nombre: c[7],
     rol: c[8],
-    token: c[9] ?? '', // NUEVO (posición 9)
-    acceso: c[10] ?? '', // NUEVO (posición 10)
+    token: c[9] ?? '',
+    acceso: c[10] ?? '',
   };
+}
+
+// --- NUEVA FUNCIÓN PARA ARMAR LA TRAMA DE REGISTRO (Estilo idéntico al login) ---
+export function construirSignupReq(
+  idMensaje: string,
+  alias: string,
+  correo: string,
+  contrasena: string,
+  nombre: string,
+  apellidos: string,
+  fechaNacimiento: string,
+  genero: string,
+  dpiNit: string,
+  telefono: string,
+  departamento: string,
+  municipio: string,
+  sucursal: string,
+  metodoPago: string,
+  membresia: string,
+  meses: string,
+  tarjetaSegura: string,
+  cvvSeguro: string,
+  pregunta: string,
+  respuesta: string
+): string {
+  if (alias.includes(SEP) || correo.includes(SEP)) {
+    throw new Error('Los campos no pueden contener el carácter |');
+  }
+
+  return [
+    PROTOCOLO,
+    VERSION,
+    'SIGNUP_REQ',
+    idMensaje,
+    alias,
+    correo,
+    contrasena,
+    nombre,
+    apellidos,
+    fechaNacimiento,
+    genero,
+    dpiNit,
+    telefono,
+    departamento,
+    municipio,
+    sucursal,
+    metodoPago,
+    membresia,
+    meses,
+    tarjetaSegura,
+    cvvSeguro,
+    pregunta,
+    respuesta
+  ].join(SEP) + '\n';
 }
