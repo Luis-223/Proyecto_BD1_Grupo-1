@@ -1,67 +1,37 @@
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Button, Image, StyleSheet, Text, TextInput, View } from 'react-native';
-import { loginPorTrama } from './conexion';
-import { guardarSesion } from './sesion';
-
-
-const SALTAR_LOGIN = false; 
+import { useRouter } from 'expo-router';
+import { StyleSheet, Text, TextInput, View, Button, Alert, Image } from 'react-native';
+import { loginPorTrama } from './conexion'; // O tu función de login correspondiente
 
 export default function Index() {
   const router = useRouter();
-  const [alias, setAlias] = useState('');
-  const [contrasena, setContrasena] = useState('');
-  const [mensaje, setMensaje] = useState('');
-  const [cargando, setCargando] = useState(false);
+  const [alias, setAlias] = useState<string>('');
+  const [contrasena, setContrasena] = useState<string>('');
+  const [intentosFallidos, setIntentosFallidos] = useState<number>(0);
+  const [cargando, setCargando] = useState<boolean>(false);
 
-  // Redirecciona a tu formulario multi-pasos
-  const crearCuenta = () => {
-    router.push({ pathname: '/sign_up' });
-  };
-
-  const iniciarSesion = async () => {
-    // Modo de pruebas directo
-    if (SALTAR_LOGIN) {
-      router.push({ 
-        pathname: '/perfil', 
-        params: { nombre: alias || 'Invitado', rol: 'TEST', acceso: 'FULL' } 
-      });
-      return;
-    }
-
+  const manejarLogin = async () => {
     if (!alias.trim() || !contrasena) {
-      setMensaje('Escribe tu usuario y tu contraseña');
+      Alert.alert('Campos incompletos', 'Por favor ingresa tu alias y contraseña.');
       return;
     }
 
     setCargando(true);
-    setMensaje('');
-
     try {
       const res = await loginPorTrama(alias.trim(), contrasena);
       
-      if (res.codigo !== '00') {
-        setMensaje(res.detalle); // Muestra el mensaje de error retornado por el servidor
-        return;
+      if (res.codigo === '00') {
+        // Login exitoso, reiniciamos contador y navegamos a la pantalla principal
+        setIntentosFallidos(0);
+        router.push('/'); // Ajusta tu ruta de inicio según corresponda
+      } else {
+        // Incrementamos el contador de fallos cuando el servidor rechaza las credenciales
+        setIntentosFallidos((prev) => prev + 1);
+        Alert.alert('Error de acceso', res.detalle || 'Usuario o contraseña incorrectos.');
       }
-
-      guardarSesion({
-        token: res.token,
-        idUsuario: res.idUsuario,
-        nombre: res.nombre,
-        rol: res.rol,
-        acceso: res.acceso,
-      });
-
-      setContrasena(''); // Limpia la contraseña por seguridad
-
-      router.push({
-        pathname: '/perfil',
-        params: { nombre: res.nombre, rol: res.rol, acceso: res.acceso },
-      });
     } catch (e) {
-      console.log(e);
-    setMensaje('Error: ' + (e instanceof Error ? e.message : 'desconocido'));
+      setIntentosFallidos((prev) => prev + 1);
+      Alert.alert('Error', e instanceof Error ? e.message : 'No se pudo conectar con el servidor.');
     } finally {
       setCargando(false);
     }
@@ -69,18 +39,15 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <Image 
-        source={require('../../assets/images/Banner.jpeg')} 
-        style={styles.logo} 
-      />
+      <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
 
       <TextInput
         style={styles.input}
-        placeholder="Usuario / Alias"
+        placeholder="Alias"
         value={alias}
         onChangeText={setAlias}
         autoCapitalize="none"
-        autoCorrect={false}
+        placeholderTextColor="#888"
       />
       
       <TextInput
@@ -89,21 +56,29 @@ export default function Index() {
         value={contrasena}
         onChangeText={setContrasena}
         secureTextEntry
+        placeholderTextColor="#888"
       />
 
-      <View style={styles.botones}>
-        <Button
-          title={cargando ? 'Entrando...' : 'Iniciar sesión'}
-          onPress={iniciarSesion}
-          disabled={cargando}
-        />
+      {/* Contador de intentos fallidos (solo se muestra si ha fallado al menos 1 vez) */}
+      {intentosFallidos > 0 && (
+        <Text style={styles.textoAlertaIntentos}>
+          Intentos fallidos: {intentosFallidos} / 5
+        </Text>
+      )}
+
+      <View style={styles.contenedorBoton}>
+        <Button title={cargando ? "Entrando..." : "Iniciar Sesión"} onPress={manejarLogin} disabled={cargando} />
       </View>
 
-      <Text style={styles.link} onPress={crearCuenta}>
-        ¿No tienes cuenta? Regístrate
+      {/* Enlace para recuperar contraseña */}
+      <Text style={styles.link} onPress={() => router.push('/recuperar')}>
+        ¿No recuerdas tu contraseña? Prueba de otra manera
       </Text>
 
-      {mensaje ? <Text style={styles.mensaje}>{mensaje}</Text> : null}
+      {/* Enlace de registro existente */}
+      <Text style={styles.linkRegistro} onPress={() => router.push('/sign_up')}>
+        ¿No tienes cuenta? Regístrate
+      </Text>
     </View>
   );
 }
@@ -111,47 +86,53 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
+    backgroundColor: '#020700', 
+    padding: 20, 
     justifyContent: 'center', 
-    padding: 24, 
-    backgroundColor: '#020700' 
-  },
-  titulo: { 
-    fontSize: 28, 
-    fontWeight: 'bold', 
-    marginBottom: 24, 
-    textAlign: 'center', 
-    color: '#5e5f5f' 
+    alignItems: 'center' 
   },
   logo: { 
-    width: 300, 
-    height: 100, 
-    alignSelf: 'center', 
-    marginBottom: 15, 
+    width: 180, 
+    height: 110, 
+    marginBottom: 20, 
     resizeMode: 'contain' 
   },
   input: { 
+    width: '100%', 
     borderWidth: 1, 
     borderColor: '#ffffff', 
     borderRadius: 8, 
     padding: 12, 
     marginBottom: 12, 
-    backgroundColor: '#ffffff' 
+    backgroundColor: '#ffffff',
+    color: '#000000'
   },
-  botones: { 
-    flexDirection: 'row', 
-    justifyContent: 'center', 
-    marginTop: 8, 
-    borderRadius: 12 
+  textoAlertaIntentos: {
+    color: '#FF5252',
+    fontSize: 13,
+    marginBottom: 10,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  contenedorBoton: { 
+    width: '100%', 
+    marginBottom: 16,
+    borderRadius: 8,
+    overflow: 'hidden'
   },
   link: { 
-    marginTop: 16, 
+    marginTop: 8, 
     textAlign: 'center', 
     color: '#5eb4ff', 
-    textDecorationLine: 'underline' 
+    textDecorationLine: 'underline',
+    fontSize: 14
   },
-  mensaje: { 
-    marginTop: 16, 
+  linkRegistro: { 
+    marginTop: 14, 
     textAlign: 'center', 
-    color: '#ff4d4d' 
+    color: '#00E676', 
+    textDecorationLine: 'underline',
+    fontSize: 14,
+    fontWeight: 'bold'
   },
 });

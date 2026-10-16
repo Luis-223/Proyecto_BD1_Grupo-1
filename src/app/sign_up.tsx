@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Button, ScrollView, Image, TouchableOpacity, StyleSheet, Text, TextInput, View, Pressable, Platform, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { RadioButton } from 'react-native-paper';
 import { Dropdown } from 'react-native-element-dropdown';
-import { nuevoIdMensaje, construirSignupReq } from './trama';
+import { construirSignupReq, nuevoIdMensaje } from './trama';
+import type { Catalogos } from './trama';
+import { catalogosPorTrama, signupPorTrama } from './conexion';
 
 export default function sign_up() {
   const router = useRouter();
@@ -13,6 +15,27 @@ export default function sign_up() {
   const [mostrarDatePickerTarjeta, setMostrarDatePickerTarjeta] = useState<boolean>(false);
   const [cargandoRegistro, setCargandoRegistro] = useState<boolean>(false);
 
+  // --- 0. CATÁLOGOS DESDE EL SERVIDOR ---
+  const [catalogos, setCatalogos] = useState<Catalogos>({
+    generos: [], departamentos: [], municipios: [], sucursales: [],
+    metodosPago: [], membresias: [], preguntas: [],
+  });
+
+  useEffect(() => {
+    catalogosPorTrama()
+      .then((res) => {
+        if (res.codigo === '00') {
+          setCatalogos(res.catalogos);
+          if (res.catalogos.membresias && res.catalogos.membresias.length > 0) {
+            setMembresiaUsuario(res.catalogos.membresias[0].value);
+          }
+        } else {
+          Alert.alert('Error', res.detalle);
+        }
+      })
+      .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'No se pudieron cargar las listas'));
+  }, []);
+
   // --- 1. CAMPOS DE TEXTO ---
   const [aliasUsuario, setAliasUsuario] = useState<string>('');
   const [correoUsuario, setCorreoUsuario] = useState<string>('');
@@ -20,11 +43,14 @@ export default function sign_up() {
   const [nombreUsuario, setNombreUsuario] = useState<string>('');
   const [apellidosUsuario, setApellidosUsuario] = useState<string>('');
   const [fechaNacimiento, setFechaNacimiento] = useState<string>('');
-  const [dpi_nitUsuario, setDpi_nitUsuario] = useState<string>('');
+  
+  // CAMPO ÚNICO DE DPI
+  const [dpiUsuario, setDpiUsuario] = useState<string>('');
+
   const [telefonoUsuario, setTelefonoUsuario] = useState<string>('');
   const [preguntaUsuario, setPreguntaUsuario] = useState<string>(''); 
 
-  // Campos de tarjeta de crédito/débito
+  // Campos de tarjeta
   const [fechaExpiracion, setFechaExpiracion] = useState<string>('');
   const [cvv, setCvv] = useState<string>('');
   const [numeroTarjeta, setNumeroTarjeta] = useState<string>('');
@@ -34,30 +60,72 @@ export default function sign_up() {
   const [departamentoUsuario, setDepartamentoUsuario] = useState<string>('');
   const [municipioUsuario, setMunicipioUsuario] = useState<string>('');
   const [sucursalUsuario, setSucursalUsuario] = useState<string>('');
-  const [membresiaUsuario, setMembresiaUsuario] = useState<string>('PLATINO'); 
+  const [membresiaUsuario, setMembresiaUsuario] = useState<string>(''); 
   const [mesPagado, setMesPagado] = useState<string>('1'); 
   const [metodoPago, setMetodoPago] = useState<string>('SUCURSAL');
   const [seleccionPregunta, setSeleccionPregunta] = useState<string>(''); 
   
-  // Variable para verificar si el método seleccionado es TARJETA
   const esTarjeta = metodoPago === 'TARJETA';
 
-  // Variable de tipo int/number derivada del estado mesPagado
   const mesesInt = parseInt(mesPagado || '1');
-  let totalPagar = 0;
-  switch (membresiaUsuario) {
-    case 'PLATINO':
-      totalPagar = mesesInt * 145;
-      break;
-    case 'GOLD':
-      totalPagar = mesesInt * 160;
-      break;
-  }  
+  const membresiaElegida = catalogos.membresias.find((m) => m.value === membresiaUsuario);
+  const totalPagar = membresiaElegida ? membresiaElegida.precio * mesesInt : 0;
 
-  // --- FUNCIONES DE VALIDACIÓN POR PASO ---
+  // --- MÁSCARAS DE ENTRADA ---
+  const manejarCambioTelefono = (texto: string) => {
+    const soloNumeros = texto.replace(/\D/g, '');
+    const numerosLocales = soloNumeros.startsWith('502') 
+      ? soloNumeros.slice(3, 11) 
+      : soloNumeros.slice(0, 8);
+
+    if (numerosLocales.length === 0) {
+      setTelefonoUsuario('');
+      return;
+    }
+
+    let formato = `+502 ${numerosLocales.slice(0, 4)}`;
+    if (numerosLocales.length > 4) {
+      formato += `-${numerosLocales.slice(4, 8)}`;
+    }
+    setTelefonoUsuario(formato);
+  };
+
+  // Máscara para el DPI (13 dígitos: #### ##### ####)
+  const manejarCambioDpi = (texto: string) => {
+    const limpio = texto.replace(/\D/g, '').slice(0, 13);
+    let dpiFormateado = limpio.slice(0, 4);
+    if (limpio.length > 4) dpiFormateado += ` ${limpio.slice(4, 9)}`;
+    if (limpio.length > 9) dpiFormateado += ` ${limpio.slice(9, 13)}`;
+    setDpiUsuario(dpiFormateado);
+  };
+
+  const manejarCambioTarjeta = (texto: string) => {
+    const soloNumeros = texto.replace(/\D/g, '');
+    const tarjetaFormateada = soloNumeros.slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ');
+    setNumeroTarjeta(tarjetaFormateada);
+  };
+
+  // --- VALIDACIONES POR PASO ---
   const avanzarPaso1 = () => {
-    if (!aliasUsuario.trim() || !correoUsuario.trim() || !contrasena1.trim()) {
+    if (!aliasUsuario.trim() || !correoUsuario.trim() || !contrasena1) {
       Alert.alert('Campos incompletos', 'Por favor completa todos los campos.');
+      return;
+    }
+    if (contrasena1.length < 7) {
+      Alert.alert('Contraseña débil', 'La contraseña debe tener al menos 7 caracteres.');
+      return;
+    }
+    if (contrasena1.includes('|')) {
+      Alert.alert('Contraseña inválida', 'La contraseña no puede contener el carácter |.');
+      return;
+    }
+    if (!/[A-Z]/.test(contrasena1)) {
+      Alert.alert('Contraseña débil', 'La contraseña debe contener al menos una letra mayúscula.');
+      return;
+    }
+    const cantidadNumeros = (contrasena1.match(/\d/g) || []).length;
+    if (cantidadNumeros < 2) {
+      Alert.alert('Contraseña débil', 'La contraseña debe contener al menos 2 números.');
       return;
     }
     setPaso(2);
@@ -69,7 +137,7 @@ export default function sign_up() {
       !apellidosUsuario.trim() ||
       !fechaNacimiento ||
       !generoUsuario ||
-      !dpi_nitUsuario.trim() ||
+      !dpiUsuario.trim() ||
       !telefonoUsuario.trim() ||
       !departamentoUsuario ||
       !municipioUsuario ||
@@ -86,14 +154,10 @@ export default function sign_up() {
       Alert.alert('Campos incompletos', 'Por favor selecciona un método de pago.');
       return;
     }
-
-    // Si es pago en sucursal, omitimos los datos de la tarjeta y saltamos directo al paso 4
     if (metodoPago === 'SUCURSAL') {
       setPaso(4);
       return;
     }
-
-    // Si seleccionó pago con tarjeta, exige obligatoriamente los campos de pago
     if (esTarjeta) {
       if (!membresiaUsuario || !mesPagado || !fechaExpiracion || !cvv.trim() || !numeroTarjeta.trim()) {
         Alert.alert('Campos incompletos', 'Por favor completa todos los datos de pago con tarjeta.');
@@ -112,52 +176,58 @@ export default function sign_up() {
     setCargandoRegistro(true);
 
     try {
-      let tarjetaSegura = '';
-      let cvvSeguro = '';
-      let membresiaFinal = 'SUCURSAL';
-      let mesesFinal = '0';
+      const partesNombre = nombreUsuario.trim().split(/\s+/);
+      const primerNombre = partesNombre[0] || '';
+      const segundoNombre = partesNombre.slice(1).join(' ') || '';
 
-      // Validación tradicional con IF para enmascarar/cifrar los datos de la tarjeta si aplica
-      if (metodoPago === 'TARJETA') {
-        // Enmascaramiento seguro nativo compatible con Expo Go
-        tarjetaSegura = btoa(numeroTarjeta).split('').reverse().join('');
-        cvvSeguro = btoa(cvv);
-        
-        membresiaFinal = membresiaUsuario;
-        mesesFinal = mesPagado;
-      }
+      const partesApellido = apellidosUsuario.trim().split(/\s+/);
+      const primerApellido = partesApellido[0] || '';
+      const segundoApellido = partesApellido.slice(1).join(' ') || '';
+
+      const idTarjeta = catalogos.metodosPago.find((m) => m.label.toLowerCase().includes('tarjeta'))?.value ?? '';
+      const metodoFinal = esTarjeta ? idTarjeta : '';
+      const membresiaFinal = esTarjeta ? membresiaUsuario : '';
+      const mesesFinal = esTarjeta ? mesPagado : '';
 
       const idMensaje = nuevoIdMensaje();
+      const nombreCompletoParaTrama = `${primerNombre}${segundoNombre ? ' ' + segundoNombre : ''}`;
+      const apellidosCompletosParaTrama = `${primerApellido}${segundoApellido ? ' ' + segundoApellido : ''}`;
 
-      // Armamos la trama utilizando la función limpia de trama.ts
+      const telefonoLimpio = telefonoUsuario.replace(/\D/g, '').replace(/^502/, '');
+      const dpiLimpio = dpiUsuario.replace(/\s+/g, '');
+
       const tramaFinal = construirSignupReq(
         idMensaje,
-        aliasUsuario,
-        correoUsuario,
+        aliasUsuario.trim(),
+        correoUsuario.trim(),
         contrasena1,
-        nombreUsuario,
-        apellidosUsuario,
+        nombreCompletoParaTrama,
+        apellidosCompletosParaTrama,
         fechaNacimiento,
         generoUsuario,
-        dpi_nitUsuario,
-        telefonoUsuario,
+        dpiLimpio,
+        telefonoLimpio,
         departamentoUsuario,
         municipioUsuario,
         sucursalUsuario,
-        metodoPago,
+        metodoFinal,
         membresiaFinal,
         mesesFinal,
-        tarjetaSegura,
-        cvvSeguro,
+        '', 
+        '', 
         seleccionPregunta,
-        preguntaUsuario
+        preguntaUsuario.trim()
       );
 
-      console.log('Trama enviada:', tramaFinal);
+      const res = await signupPorTrama(idMensaje, tramaFinal);
 
-      Alert.alert('¡Éxito!', 'DATOS_ACEPTADOS_USUARIO CREADO', [
-        { text: 'OK', onPress: () => router.push('/') }
-      ]);
+      if (res.codigo === '00') {
+        Alert.alert('¡Cuenta creada!', res.detalle, [
+          { text: 'OK', onPress: () => router.push('/') },
+        ]);
+      } else {
+        Alert.alert('No se pudo registrar', res.detalle);
+      }
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Ocurrió un error al procesar el registro.');
     } finally {
@@ -165,11 +235,14 @@ export default function sign_up() {
     }
   };
 
-  // --- 3. CATÁLOGOS / LISTAS ---
-  const opcionesGenero = [
-    { label: 'Masculino', value: 'M' },
-    { label: 'Femenino', value: 'F' },
-  ];
+  const opcionesGenero = catalogos.generos;
+  const opcionesDepartamentos = catalogos.departamentos;
+  const opcionesMunicipios = catalogos.municipios.filter(
+    (m) => m.idDepartamento === departamentoUsuario
+  );
+  const opcionesSucursales = catalogos.sucursales;
+  const opcionesPreguntas = catalogos.preguntas;
+
   const opcionesMeses = [
     { label: '1 Mes', value: '1' },
     { label: '2 Meses', value: '2' },
@@ -183,26 +256,6 @@ export default function sign_up() {
     { label: '10 Meses', value: '10' },
     { label: '11 Meses', value: '11' },
     { label: '1 año', value: '12' },
-  ];
-  const opcionesDepartamentos = [
-    { label: 'Guatemala', value: '01' },
-    { label: 'Sacatepéquez', value: '03' },
-    { label: 'Chimaltenango', value: '04' },
-  ];
-  const opcionesMunicipios = [
-    { label: 'Guatemala City13132', value: '0101' },
-    { label: 'Sacatepéquez123', value: '0301' },
-    { label: 'Chimaltenango1231231', value: '0401' },
-  ];
-  const opcionesSucursales = [
-    { label: 'Guatemalazona1', value: '01' },
-    { label: 'Sacatepéquezzona1', value: '03' },
-    { label: 'Chimaltenangozona1', value: '04' },
-  ];
-
-  const opcionesPreguntas = [
-    { label: '¿Nombre de tu primera mascota?', value: 'PREG_1' },
-    { label: '¿Ciudad donde naciste?', value: 'PREG_2' },
   ];
 
   const iniciarSesion1 = () => {
@@ -237,6 +290,10 @@ export default function sign_up() {
           onChangeText={setContrasena1}
           secureTextEntry
         />
+        <Text style={styles.textoAyudaPassword}>
+          Mínimo 7 caracteres, al menos 1 mayúscula y 2 números.
+        </Text>
+
         <View style={styles.botones}>
             <View style={styles.contenedorBoton}>
               <Button title="Siguiente" onPress={avanzarPaso1} />
@@ -260,14 +317,14 @@ export default function sign_up() {
           placeholder="Nombre/s"
           value={nombreUsuario}
           onChangeText={setNombreUsuario}
-          autoCapitalize="none"
+          autoCapitalize="words"
         />
         <TextInput
           style={styles.input}
           placeholder="Apellido/s"
           value={apellidosUsuario}
           onChangeText={setApellidosUsuario}
-          autoCapitalize="none"
+          autoCapitalize="words"
         />
         <Pressable 
           style={styles.input} 
@@ -303,22 +360,29 @@ export default function sign_up() {
             setGeneroUsuario(item.value);
           }}
         />
+
+        {/* INPUT DE DPI CON MÁSCARA */}
         <TextInput
           style={styles.input}
-          placeholder="Nit/DPI"
+          placeholder="DPI (Ej. 3073 22076 0401)"
           keyboardType="numeric"
-          value={dpi_nitUsuario}
-          onChangeText={setDpi_nitUsuario}
+          maxLength={15}
+          value={dpiUsuario}
+          onChangeText={manejarCambioDpi}
           autoCapitalize="none"
         />
+
+        {/* INPUT DE TELÉFONO CON MÁSCARA */}
         <TextInput
           style={styles.input}
-          placeholder="telefono"
-          keyboardType="numeric"
+          placeholder="Teléfono (+502 ####-####)"
+          keyboardType="phone-pad"
+          maxLength={15}
           value={telefonoUsuario}
-          onChangeText={setTelefonoUsuario}
+          onChangeText={manejarCambioTelefono}
           autoCapitalize="none"
         />
+
         <Dropdown
           style={styles.dropdown}
           data={opcionesDepartamentos}
@@ -328,6 +392,7 @@ export default function sign_up() {
           value={departamentoUsuario}
           onChange={(item) => {
             setDepartamentoUsuario(item.value);
+            setMunicipioUsuario('');
           }}
         />
         <Dropdown
@@ -373,7 +438,6 @@ export default function sign_up() {
         contentContainerStyle={styles.scrollContent}
         style={[styles.scrollBase, paso !== 3 && styles.oculto]}
       >
-        {/* 1. GRUPO: Método de Pago */}
         <Text style={styles.label}>Método de Pago:</Text>
         <RadioButton.Group onValueChange={newValue => setMetodoPago(newValue)} value={metodoPago}>
           <View style={styles.contenedorHorizontal}>
@@ -397,46 +461,34 @@ export default function sign_up() {
           </View>
         </RadioButton.Group>
 
-        {/* 2. GRUPO: Tipo de Membresía (Deshabilitado si es pago en sucursal) */}
         <Text style={[styles.label, !esTarjeta && styles.deshabilitadoTexto]}>Tipo de Membresía:</Text>
         <RadioButton.Group 
           onValueChange={newValue => esTarjeta && setMembresiaUsuario(newValue)} 
           value={membresiaUsuario}
         >
           <View style={styles.contenedorHorizontal}>
-            <TouchableOpacity 
-              style={styles.filaOpcionHorizontal} 
-              onPress={() => esTarjeta && setMembresiaUsuario('PLATINO')}
-              activeOpacity={esTarjeta ? 0.7 : 1}
-              disabled={!esTarjeta}
-            >
-              <RadioButton.Android 
-                value="PLATINO" 
-                color={esTarjeta ? "#00E676" : "#555"} 
-                uncheckedColor={esTarjeta ? "#888" : "#444"} 
+            {catalogos.membresias.map((m) => (
+              <TouchableOpacity 
+                key={m.value}
+                style={styles.filaOpcionHorizontal} 
+                onPress={() => esTarjeta && setMembresiaUsuario(m.value)}
+                activeOpacity={esTarjeta ? 0.7 : 1}
                 disabled={!esTarjeta}
-              />
-              <Text style={[styles.textoOpcion, !esTarjeta && styles.deshabilitadoTexto]}>Membresia Platino</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.filaOpcionHorizontal} 
-              onPress={() => esTarjeta && setMembresiaUsuario('GOLD')}
-              activeOpacity={esTarjeta ? 0.7 : 1}
-              disabled={!esTarjeta}
-            >
-              <RadioButton.Android 
-                value="GOLD" 
-                color={esTarjeta ? "#00E676" : "#555"} 
-                uncheckedColor={esTarjeta ? "#888" : "#444"} 
-                disabled={!esTarjeta}
-              />
-              <Text style={[styles.textoOpcion, !esTarjeta && styles.deshabilitadoTexto]}>Membresia Gold</Text>
-            </TouchableOpacity>
+              >
+                <RadioButton.Android 
+                  value={m.value} 
+                  color={esTarjeta ? "#00E676" : "#555"} 
+                  uncheckedColor={esTarjeta ? "#888" : "#444"} 
+                  disabled={!esTarjeta}
+                />
+                <Text style={[styles.textoOpcion, !esTarjeta && styles.deshabilitadoTexto]}>
+                  {`${m.label} (Q${m.precio})`}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </RadioButton.Group>
 
-        {/* DROPDOWN DE MESES Y TOTAL A PAGAR */}
         <View style={styles.contenedorMesesRow}>
           <Dropdown
             style={[styles.dropdownCompacto, !esTarjeta && styles.inputDeshabilitado]}
@@ -453,9 +505,7 @@ export default function sign_up() {
           <Text style={[styles.labelMeses, !esTarjeta && styles.deshabilitadoTexto]}>   Total a pagar Q.{totalPagar}</Text>
         </View>
 
-        {/* FILA DE CAMPOS DE FECHA Y CVV */}
         <View style={styles.filaInputs}>
-          {/* Selector de Mes/Año */}
           <Pressable 
             style={[styles.input, styles.inputMitad, !esTarjeta && styles.inputDeshabilitado]} 
             onPress={() => esTarjeta && setMostrarDatePickerTarjeta(true)}
@@ -481,7 +531,6 @@ export default function sign_up() {
             </Text>
           </Pressable>
 
-          {/* CVV / CVC */}
           <TextInput
             style={[styles.input, styles.inputMitad, !esTarjeta && styles.inputDeshabilitado]}
             placeholder="CVV / CVC"
@@ -494,29 +543,23 @@ export default function sign_up() {
           />
         </View>
 
-        {/* TEXTINPUT NÚMERO DE TARJETA CON IMÁGENES */}
         <View style={[styles.inputConImagenContainer, !esTarjeta && styles.inputDeshabilitado]}>
           <TextInput
             style={[styles.inputConImagenText, !esTarjeta && styles.deshabilitadoTextoInput]}
-            placeholder="Número de tarjeta"
+            placeholder="0000 0000 0000 0000"
             keyboardType="numeric"
             value={numeroTarjeta}
-            onChangeText={setNumeroTarjeta}
+            onChangeText={manejarCambioTarjeta}
             editable={esTarjeta}
             placeholderTextColor="#888888"
+            maxLength={19}
           />
           
           <View style={styles.contenedorImagenesDerecha}>
-            <Image 
-              source={require('../../assets/images/visa.png')} 
-              style={[styles.imagenDerecha, !esTarjeta && { opacity: 0.3 }]} 
-            />
+            <Image source={require('../../assets/images/visa.png')} style={[styles.imagenDerecha, !esTarjeta && { opacity: 0.3 }]} />
           </View>
           <View style={styles.contenedorImagenesDerecha}>
-            <Image 
-              source={require('../../assets/images/mastercard.png')} 
-              style={[styles.imagenDerecha, !esTarjeta && { opacity: 0.3 }]} 
-            />
+            <Image source={require('../../assets/images/mastercard.png')} style={[styles.imagenDerecha, !esTarjeta && { opacity: 0.3 }]} />
           </View>
         </View>
 
@@ -585,6 +628,7 @@ const styles = StyleSheet.create({
   titulo: { fontSize: 28, fontWeight: 'bold', marginBottom: 24, textAlign: 'center', color: '#5e5f5f' },
   logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
   input: { borderWidth: 1, borderColor: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#ffffff' },
+  textoAyudaPassword: { color: '#cccccc', fontSize: 12, marginTop: -8, marginBottom: 12, marginLeft: 4 },
   botones: { flexDirection: 'row', justifyContent: 'center', gap: 12, alignItems: 'center', marginTop: 5, marginBottom: 8 },
   contenedorBoton: { flex: 0.45, marginHorizontal: 6 },
   link: { marginTop: 12, textAlign: 'center', color: '#5eb4ff', textDecorationLine: 'underline' },
@@ -596,7 +640,6 @@ const styles = StyleSheet.create({
   filaOpcionHorizontal: { flexDirection: 'row', alignItems: 'center', marginRight: 16 },
   textoOpcion: { color: '#FFFFFF', fontSize: 14, marginLeft: 1 },
   
-  // ESTILOS DE DESHABILITADO
   inputDeshabilitado: {
     backgroundColor: '#e0e0e0',
     borderColor: '#a0a0a0',
