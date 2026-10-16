@@ -132,8 +132,48 @@ const TIPOS = {
       return { detalle: r.mensaje, campos: [] };
     },
   },
-};
 
+  SIGNUP: {
+    campos: 1,                                         // Devuelve una casilla: el id del usuario nuevo
+    async ejecutar([
+      alias, correo, contrasena, nombre, apellidos,    // El orden DEBE ser el mismo de construirSignupReq
+      fechaNacimiento, genero, dpiNit, telefono,
+      departamento, municipio, sucursal, metodoPago,
+      membresia, meses, tarjeta, cvv, idPregunta, palabra,
+    ]) {
+      const r = await cuentas.registrarCuenta({
+        alias, correo, contrasena, nombre, apellidos,
+        fechaNacimiento, genero, dpiNit, telefono,
+        departamento, municipio, sucursal, metodoPago,
+        membresia, meses, idPregunta, palabra,
+      });
+      return { detalle: r.mensaje, campos: [r.idUsuario] };
+    },
+  },
+  // CATALOGOS_REQ: (sin campos)
+  // CATALOGOS_RES: generos | departamentos | municipios | sucursales | metodosPago | membresias | preguntas
+  //   Cada campo es una lista "id^nombre~id^nombre", excepto:
+  //   municipios = "id^idDepartamento^nombre"   (para filtrar por departamento)
+  //   membresias = "id^nombre^precio^duracion"  (para calcular el total en la app)
+  CATALOGOS: {
+    campos: 7,
+    async ejecutar() {
+      const c = await cuentas.listarCatalogos();
+      return {
+        detalle: 'Catálogos',
+        campos: [
+          lista(c.generos.map((g) => [g.id, g.nombre])),
+          lista(c.departamentos.map((d) => [d.id, d.nombre])),
+          lista(c.municipios.map((m) => [m.id, m.id_departamento, m.nombre])),
+          lista(c.sucursales.map((s) => [s.id, s.nombre])),
+          lista(c.metodosPago.map((p) => [p.id, p.nombre])),
+          lista(c.membresias.map((t) => [t.id, t.nombre, t.precio, t.duracion])),
+          lista(c.preguntas.map((p) => [p.id, p.nombre])),
+        ],
+      };
+    },
+  },
+};
 // 3. RECIBIR UNA TRAMA
 // Siempre responde HTTP 200 con una trama: el resultado real va en
 // el campo "código". Solo se acepta texto (máximo 10 KB).
@@ -166,6 +206,8 @@ router.post('/', express.text({ type: () => true, limit: '10kb' }), async (req, 
     if (t.inesperado) console.error(error);
     res.send(armarTrama(tipo, idMensaje, t.trama, t.mensaje, vacios));
   }
+  
 });
+
 
 module.exports = router;

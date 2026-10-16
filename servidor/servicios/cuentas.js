@@ -50,7 +50,18 @@ function validarContrasenaNueva(contrasena) {
     throw new ErrorApp('DATOS', `La contraseña no puede pasar de ${LARGO_MAXIMO_CONTRASENA} caracteres`);
   }
 }
+const FORMATO_FECHA = /^\d{4}-\d{2}-\d{2}$/;               // AAAA-MM-DD, por ejemplo 2000-05-10
+const FORMATO_CORREO = /^\S+@\S+\.\S+$/;                    // algo@algo.algo
 
+// "Juan  Carlos" → { primero: 'Juan', segundo: 'Carlos' }
+// La app manda el nombre completo en un campo; la tabla Usuario lo tiene separado
+function separarNombre(completo) {
+  const partes = texto(completo).trim().split(/\s+/).filter(Boolean); // Corta por espacios, ignora los dobles
+  return {
+    primero: partes[0] || '',                               // La primera palabra
+    segundo: partes.slice(1).join(' ') || null,             // El resto (o null si no hay)
+  };
+}
 // Si el alias no existe igual se hace un cálculo Argon2 (contra un hash
 // falso). Así la respuesta tarda lo mismo y nadie puede averiguar qué
 // alias existen midiendo el tiempo.
@@ -338,11 +349,116 @@ async function listarPreguntas() {
   const resultado = await pool.request().execute('usp_ListarPreguntasSeguridad');
   return resultado.recordset; // [{ id_pregunta, texto_pregunta }]
 }
+// LISTAS PARA EL REGISTRO (sin sesión): todo lo que la app necesita para sus desplegables
+async function listarCatalogos() {
+  const pool = await conectar();
+  const r = await pool.request().execute('usp_ListarCatalogos');
+  // recordsets es un arreglo con una tabla por cada SELECT del procedimiento, en el mismo orden
+  const [generos, departamentos, municipios, sucursales, metodosPago, membresias, preguntas] = r.recordsets;
+  return { generos, departamentos, municipios, sucursales, metodosPago, membresias, preguntas };
+}
+// REGISTRAR UNA CUENTA NUEVA (sin sesión)
+// "5" → 5   |   "abc", "0", "-3", "" → null
+const aEntero = (valor) => {
+  const n = Number(valor);
+  return Number.isInteger(n) && n > 0 ? n : null;   // Solo enteros positivos
+};
 
+// REGISTRAR UNA CUENTA NUEVA (sin sesión)
+// Dos caminos: paga ahora (método de pago con id) o paga en la sucursal (método vacío)
+async function registrarCuenta(d) {
+  // 1. Limpiar
+  const alias = texto(d.alias).trim();
+  const correo = texto(d.correo).trim().toLowerCase();
+  const telefono = texto(d.telefono).trim();
+  const contrasena = texto(d.contrasena);
+  const palabra = normalizarPalabra(d.palabra);
+  const fecha = texto(d.fechaNacimiento).trim();
+  const nitDpi = texto(d.dpiNit).trim();
+  const nombre = separarNombre(d.nombre);
+  const apellido = separarNombre(d.apellidos);
+  const ids = {                                        // Catálogos obligatorios
+    genero: aEntero(d.genero),
+    departamento: aEntero(d.departamento),
+    municipio: aEntero(d.municipio),
+    sucursal: aEntero(d.sucursal),
+    pregunta: aEntero(d.idPregunta),
+  };
+  const pago = {                                       // Datos de pago (opcionales)
+    metodo: aEntero(d.metodoPago),                     // Vacío o "SUCURSAL" → null
+    membresia: aEntero(d.membresia),
+    meses: aEntero(d.meses),
+  };
+  const pagaAhora = pago.metodo !== null;              // Si trae método de pago válido, paga ahora
+
+  // 2. Validar
+  if (!alias || !correo || !contrasena || !nitDpi || !nombre.primero || !apellido.primero) {
+    throw new ErrorApp('DATOS', 'Completa todos los campos obligatorios');
+  }
+  if (!FORMATO_CORREO.test(correo)) throw new ErrorApp('DATOS', 'El correo no es válido');
+  if (!FORMATO_FECHA.test(fecha)) {
+    throw new ErrorApp('DATOS', 'La fecha de nacimiento debe tener el formato AAAA-MM-DD');
+  }
+  if (new Date(fecha) > new Date()) {                  // NUEVO: nada de fechas futuras
+    throw new ErrorApp('DATOS', 'La fecha de nacimiento no puede ser futura');
+  }
+  validarContrasenaNueva(contrasena);
+  if (palabra.length < LARGO_MINIMO_PALABRA) {
+    throw new ErrorApp('DATOS', `La palabra clave debe tener al menos ${LARGO_MINIMO_PALABRA} caracteres`);
+  }
+  if (Object.values(ids).includes(null)) {
+    throw new ErrorApp('DATOS', 'Revisa género, departamento, municipio, sucursal y pregunta');
+  }
+  if (pagaAhora) {                                     // Solo si paga ahora, exigimos membresía y meses
+    if (!pago.membresia) throw new ErrorApp('DATOS', 'Elige un tipo de membresía');
+    if (!pago.meses || pago.meses > 12) throw new ErrorApp('DATOS', 'Se pueden pagar entre 1 y 12 meses');
+  }
+
+  // 3. Cifrar
+  const [hashContrasena, hashPalabra] = await Promise.all([
+    argon2.hash(contrasena, OPCIONES_ARGON2),
+    argon2.hash(palabra, OPCIONES_ARGON2),
+  ]);
+
+  // 4. Guardar
+  const pool = await conectar();
+  const resultado = await pool.request()
+    .input('alias', sql.VarChar(60), alias)
+    .input('correo', sql.VarChar(100), correo)
+    .input('telefono', sql.VarChar(20), telefono || null)
+    .input('contrasena_argon2', sql.VarChar(255), hashContrasena)
+    .input('primer_nombre', sql.VarChar(50), nombre.primero)
+    .input('segundo_nombre', sql.VarChar(50), nombre.segundo)
+    .input('primer_apellido', sql.VarChar(50), apellido.primero)
+    .input('segundo_apellido', sql.VarChar(50), apellido.segundo)
+    .input('fecha_nacimiento', sql.Date, new Date(fecha))
+    .input('id_genero', sql.Int, ids.genero)
+    .input('nit_dpi', sql.VarChar(20), nitDpi)
+    .input('id_departamento', sql.Int, ids.departamento)
+    .input('id_municipio', sql.Int, ids.municipio)
+    .input('id_sucursal', sql.Int, ids.sucursal)
+    .input('id_metodo_pago', sql.Int, pagaAhora ? pago.metodo : null)       // null = paga en sucursal
+    .input('id_tipo_membresia', sql.Int, pagaAhora ? pago.membresia : null)
+    .input('meses', sql.Int, pagaAhora ? pago.meses : null)
+    .input('id_pregunta', sql.Int, ids.pregunta)
+    .input('respuesta_argon2', sql.VarChar(255), hashPalabra)
+    .execute('usp_RegistrarCliente');
+
+  // 5. Responder según el camino
+  const filas = resultado.recordsets.at(-1) || [];
+  return {
+    mensaje: pagaAhora
+      ? 'Cuenta creada. Ya puedes iniciar sesión.'
+      : 'Cuenta creada. Paga tu membresía en tu sucursal para tener acceso completo.',
+    idUsuario: filas[0]?.id_usuario,
+  };
+}
 module.exports = {
   iniciarSesion,
   recuperarContrasena,
   guardarPalabraClave,
   cambiarContrasena,
   listarPreguntas,
+  registrarCuenta,
+  listarCatalogos,
 };
