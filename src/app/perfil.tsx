@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ReactNode, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { guardarSesion } from '../../services/sesion'; // NUEVO
+import { guardarSesion } from './sesion'; // NUEVO
 
 type Item = { icono: string; titulo: string };
 
