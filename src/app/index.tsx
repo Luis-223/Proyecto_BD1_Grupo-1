@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, TextInput, View, Button, Alert, Image } from 'react-native';
-import { loginPorTrama } from './conexion'; // O tu función de login correspondiente
+import { loginPorTrama } from './conexion';
 
 export default function Index() {
   const router = useRouter();
@@ -21,9 +21,16 @@ export default function Index() {
       const res = await loginPorTrama(alias.trim(), contrasena);
       
       if (res.codigo === '00') {
-        // Login exitoso, reiniciamos contador y navegamos a la pantalla principal
+        // Login exitoso, reiniciamos contador y navegamos al perfil
         setIntentosFallidos(0);
-        router.push('/'); // Ajusta tu ruta de inicio según corresponda
+        router.push({
+          pathname: '/perfil',
+          params: { 
+            nombre: res.nombre, 
+            rol: res.rol, 
+            acceso: res.acceso 
+          }
+        });
       } else {
         // Incrementamos el contador de fallos cuando el servidor rechaza las credenciales
         setIntentosFallidos((prev) => prev + 1);
@@ -59,7 +66,7 @@ export default function Index() {
         placeholderTextColor="#888"
       />
 
-      {/* Contador de intentos fallidos (solo se muestra si ha fallado al menos 1 vez) */}
+      {/* Contador de intentos fallidos */}
       {intentosFallidos > 0 && (
         <Text style={styles.textoAlertaIntentos}>
           Intentos fallidos: {intentosFallidos} / 5
