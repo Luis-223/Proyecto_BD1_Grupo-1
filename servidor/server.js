@@ -80,6 +80,9 @@ app.use((error, req, res, next) => {
 
 // ENCENDER EL SERVIDOR Y PRECALENTAR CONEXIÓN A BASE DE DATOS
 const PUERTO = Number(process.env.PORT) || 3000;
+// En la PC: 0.0.0.0 (el teléfono se conecta por la red local)
+// En el servidor: HOST=127.0.0.1 (solo Apache llega a Node; desde internet se entra por HTTPS)
+const HOST = process.env.HOST || '0.0.0.0';
 
 async function arrancarServidor() {
   try {
@@ -87,13 +90,13 @@ async function arrancarServidor() {
     await conectar();
     console.log('Conexión inicial a la Base de Datos establecida.');
 
-    servidorHttp.listen(PUERTO, '0.0.0.0', () => {
-      console.log(`Servidor FitManager corriendo en http://localhost:${PUERTO}`);
+    servidorHttp.listen(PUERTO, HOST, () => {
+      console.log(`Servidor FitManager corriendo en http://${HOST}:${PUERTO}`);
     });
   } catch (err) {
     console.error('Error al conectar a la Base de Datos al iniciar:', err);
     // Arrancar el servidor HTTP aun si falla la BD para permitir diagnóstico
-    servidorHttp.listen(PUERTO, '0.0.0.0', () => {
+    servidorHttp.listen(PUERTO, HOST, () => {
       console.log(`Servidor iniciado en puerto ${PUERTO} (Sin conexión a BD)`);
     });
   }

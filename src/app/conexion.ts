@@ -14,9 +14,15 @@ import {
 } from './trama';
 import type { RespuestaLogin, RespuestaSignup, RespuestaCatalogos } from './trama';
 
+// Servidor publicado en internet (Azure, con HTTPS).
+// Para probar contra el servidor de tu PC en la red local, déjalo vacío: ''
+const URL_PUBLICA = 'https://fitmanager.sysmonitor-grupo3.online';
+
 const PUERTO_SERVIDOR = 3000;
 const IP_SERVIDOR_FIJA = '192.168.1.9';
-const ESPERA_MAXIMA_MS = 30000;
+// La base gratuita de Azure tarda hasta un minuto en "despertar" si nadie la usó:
+// la primera petición puede tardar, por eso se espera hasta 75 s
+const ESPERA_MAXIMA_MS = 75000;
 
 function hostDelServidor(): string {
   if (IP_SERVIDOR_FIJA && Platform.OS !== 'web') {
@@ -35,7 +41,9 @@ function hostDelServidor(): string {
   return 'localhost';
 }
 
-export const URL_SERVIDOR = `http://${hostDelServidor()}:${PUERTO_SERVIDOR}/trama`;
+export const URL_SERVIDOR = URL_PUBLICA
+  ? `${URL_PUBLICA}/trama`
+  : `http://${hostDelServidor()}:${PUERTO_SERVIDOR}/trama`;
 
 async function enviarTrama(trama: string): Promise<string> {
   const control = new AbortController();

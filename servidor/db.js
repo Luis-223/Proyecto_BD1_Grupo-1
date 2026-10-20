@@ -9,11 +9,17 @@ const configuracion = {
   server: process.env.DB_SERVER, // 'localhost'
   database: process.env.DB_NAME, // 'FitManager'
   port: Number(process.env.DB_PORT) || 1433,
-       options: {
-       encrypt: false, // en la red local no hace falta cifrar
-       trustServerCertificate: true, // confía en el certificado de tu propia PC
-       useUTC: false, // las fechas de la base están en hora de Guatemala, no en hora universal
-     },
+  // La base gratuita de Azure se "duerme" si nadie la usa y tarda hasta
+  // un minuto en despertar: se espera 60 s antes de dar error
+  connectionTimeout: Number(process.env.DB_CONNECTION_TIMEOUT) || 60000,
+  requestTimeout: 30000,
+  options: {
+    // En la PC: DB_ENCRYPT vacío o false (red local, sin cifrar)
+    // En Azure SQL: DB_ENCRYPT=true (Azure exige conexión cifrada)
+    encrypt: process.env.DB_ENCRYPT === 'true',
+    trustServerCertificate: process.env.DB_ENCRYPT !== 'true', // solo se confía a ciegas en la PC propia
+    useUTC: false, // las fechas de la base están en hora de Guatemala, no en hora universal
+  },
   pool: {
     max: 10, // hasta 10 conexiones a la vez
     min: 0,

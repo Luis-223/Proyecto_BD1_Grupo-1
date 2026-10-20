@@ -1,0 +1,32 @@
+# /etc/systemd/system/fitmanager.service
+# Mantiene el servidor de FitManager encendido: arranca con la máquina
+# y se reinicia solo si se cae. Corre con su propio usuario (fitmanager),
+# separado de www-data y de SysMonitor.
+
+[Unit]
+Description=FitManager - servidor Node.js
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fitmanager
+Group=fitmanager
+WorkingDirectory=/opt/fitmanager/servidor
+ExecStart=/usr/bin/node server.js
+Environment=NODE_ENV=production
+Restart=on-failure
+RestartSec=5
+
+# La VM tiene menos de 1 GB de RAM: si FitManager crece de más,
+# se reinicia él y no tumba a Apache ni a SysMonitor
+MemoryMax=300M
+
+# Endurecimiento: no puede escalar privilegios ni escribir en el sistema
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
