@@ -8,7 +8,13 @@
 //   GET    /cliente/entrenadores              -> entrenadores de su sucursal (y cuáles son suyos)
 //   POST   /cliente/entrenadores/:id          -> agregar un entrenador
 //   DELETE /cliente/entrenadores/:id          -> quitar un entrenador
-//   GET /cliente/metas                        -> sus metas
+//   GET  /cliente/metas                       -> sus metas con progreso y avances
+//   POST /cliente/metas                       -> crear meta
+//   POST /cliente/metas/:id/avances           -> registrar un avance
+//   POST /cliente/metas/:id/cancelar          -> cancelar una meta
+//   GET  /cliente/chat                        -> mensajes con su sucursal (?despues=<id>)
+//   POST /cliente/chat                        -> enviar mensaje a su sucursal
+//   GET  /cliente/chat/sin-leer               -> cuántas respuestas de recepción no ha leído
 //   GET /cliente/notificaciones               -> sus avisos
 //   PUT /cliente/notificaciones/:id/leida     -> marcar un aviso como leído
 //
@@ -162,6 +168,72 @@ router.get('/sucursales', async (req, res) => {
     res.json(await completarUbicaciones(sucursales));
   } catch (error) {
     responderErrorSql(res, error, 'No se pudieron consultar las sucursales');
+  }
+});
+
+// =============================================================
+// CHAT CON SU SUCURSAL (chat.tsx) — procedimientos de 13_chat.sql
+// Está ANTES de soloAccesoCompleto: con la membresía vencida también
+// puede escribirle a recepción (por ejemplo, para renovar).
+// La recepción contesta desde la app de escritorio (PRINCIPAL.py).
+// =============================================================
+
+function mensajeChat(m) {
+  return {
+    id_mensaje: m.id_mensaje,
+    texto: m.texto,
+    fecha: m.fecha,                 // "AAAA-MM-DDTHH:MM:SS" en hora de Guatemala
+    de_cliente: Boolean(m.de_cliente),
+    autor: m.autor,
+    leido: Boolean(m.leido),
+  };
+}
+
+// GET /cliente/chat?despues=<id>
+// Sin "despues": los últimos 100 mensajes. Con "despues": solo los nuevos.
+router.get('/chat', async (req, res) => {
+  const despues = req.query.despues === undefined || req.query.despues === '0' ? 0 : numeroValido(req.query.despues);
+  if (despues === null) return res.status(400).json({ error: 'El parámetro despues no es válido' });
+  try {
+    const pool = await conectar();
+    const resultado = await pool.request()
+      .input('id_cliente', sql.Int, req.usuario.id_cliente)
+      .input('despues', sql.Int, despues)
+      .execute('usp_App_ChatListar');
+    const [sucursal = [], mensajes = []] = resultado.recordsets;
+    res.json({ sucursal: sucursal[0]?.sucursal ?? '', mensajes: mensajes.map(mensajeChat) });
+  } catch (error) {
+    responderErrorSql(res, error, 'No se pudo cargar el chat');
+  }
+});
+
+// POST /cliente/chat   { texto }
+router.post('/chat', async (req, res) => {
+  const texto = typeof req.body?.texto === 'string' ? req.body.texto.trim() : '';
+  if (!texto) return res.status(400).json({ error: 'Escribe un mensaje' });
+  if (texto.length > 1000) return res.status(400).json({ error: 'El mensaje es muy largo (máximo 1000 letras)' });
+  try {
+    const pool = await conectar();
+    const resultado = await pool.request()
+      .input('id_cliente', sql.Int, req.usuario.id_cliente)
+      .input('texto', sql.NVarChar(1000), texto)
+      .execute('usp_App_ChatEnviar');
+    res.status(201).json(mensajeChat(resultado.recordset[0]));
+  } catch (error) {
+    responderErrorSql(res, error, 'No se pudo enviar el mensaje');
+  }
+});
+
+// GET /cliente/chat/sin-leer  → { sin_leer }
+router.get('/chat/sin-leer', async (req, res) => {
+  try {
+    const pool = await conectar();
+    const resultado = await pool.request()
+      .input('id_cliente', sql.Int, req.usuario.id_cliente)
+      .execute('usp_App_ChatSinLeer');
+    res.json({ sin_leer: Number(resultado.recordset[0]?.sin_leer || 0) });
+  } catch (error) {
+    responderErrorSql(res, error, 'No se pudo consultar el chat');
   }
 });
 
@@ -347,22 +419,104 @@ router.delete('/entrenadores/:id', async (req, res) => {
   }
 });
 
+// =============================================================
+// METAS (pantalla mis_metas.tsx) — procedimientos de 12_metas.sql
+// =============================================================
+
+// "72.5" → 72.5   |   "", "abc", "-3" → null
+function numeroPositivo(valor) {
+  const n = Number(valor);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 // GET /cliente/metas
-// Primero las que están en progreso, luego las cumplidas/canceladas.
+// Sus metas con valor actual y progreso (0-100), y los avances de cada una.
 router.get('/metas', async (req, res) => {
   try {
     const pool = await conectar();
     const resultado = await pool.request()
       .input('id_cliente', sql.Int, req.usuario.id_cliente)
-      .query(`
-        SELECT id_meta, tipo_meta, descripcion, valor_objetivo, unidad_medida,
-               fecha_inicio, fecha_objetivo, estado
-        FROM Meta
-        WHERE id_cliente = @id_cliente
-        ORDER BY CASE WHEN estado = 'En progreso' THEN 0 ELSE 1 END, fecha_objetivo`);
-    res.json(resultado.recordset);
+      .execute('usp_App_ListarMetas');
+    const [metas = [], avances = []] = resultado.recordsets;
+
+    const porMeta = new Map(metas.map((m) => [m.id_meta, {
+      ...m,
+      valor_inicial: m.valor_inicial === null ? null : Number(m.valor_inicial),
+      valor_objetivo: m.valor_objetivo === null ? null : Number(m.valor_objetivo),
+      valor_actual: m.valor_actual === null ? null : Number(m.valor_actual),
+      progreso: Number(m.progreso),
+      avances: [],
+    }]));
+    for (const a of avances) {
+      porMeta.get(a.id_meta)?.avances.push({ id_avance: a.id_avance, fecha: a.fecha, valor: Number(a.valor), nota: a.nota });
+    }
+    res.json([...porMeta.values()]);
   } catch (error) {
     responderErrorSql(res, error, 'No se pudo consultar tus metas');
+  }
+});
+
+// POST /cliente/metas
+// { tipo_meta, descripcion, valor_inicial?, valor_objetivo, unidad_medida, fecha_objetivo: "AAAA-MM-DD" }
+router.post('/metas', async (req, res) => {
+  const d = req.body || {};
+  const fecha = String(d.fecha_objetivo || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return res.status(400).json({ error: 'La fecha objetivo no es válida' });
+  }
+  try {
+    const pool = await conectar();
+    const resultado = await pool.request()
+      .input('id_cliente', sql.Int, req.usuario.id_cliente)
+      .input('tipo_meta', sql.VarChar(50), String(d.tipo_meta || ''))
+      .input('descripcion', sql.VarChar(255), String(d.descripcion || '').slice(0, 255))
+      .input('valor_inicial', sql.Decimal(10, 2), numeroPositivo(d.valor_inicial))
+      .input('valor_objetivo', sql.Decimal(10, 2), numeroPositivo(d.valor_objetivo))
+      .input('unidad_medida', sql.VarChar(15), String(d.unidad_medida || '').slice(0, 15))
+      .input('fecha_objetivo', sql.VarChar(10), fecha)
+      .execute('usp_App_CrearMeta');
+    res.status(201).json({ mensaje: 'Meta creada', id_meta: resultado.recordset[0]?.id_meta });
+  } catch (error) {
+    responderErrorSql(res, error, 'No se pudo crear la meta');
+  }
+});
+
+// POST /cliente/metas/:id/avances   { valor, nota? }
+router.post('/metas/:id/avances', async (req, res) => {
+  const idMeta = numeroValido(req.params.id);
+  if (!idMeta) return res.status(400).json({ error: 'El número de meta no es válido' });
+  try {
+    const pool = await conectar();
+    const resultado = await pool.request()
+      .input('id_cliente', sql.Int, req.usuario.id_cliente)
+      .input('id_meta', sql.Int, idMeta)
+      .input('valor', sql.Decimal(10, 2), numeroPositivo(req.body?.valor))
+      .input('nota', sql.VarChar(150), req.body?.nota ? String(req.body.nota).slice(0, 150) : null)
+      .execute('usp_App_RegistrarAvance');
+    const fila = resultado.recordset[0] || {};
+    res.status(201).json({
+      mensaje: fila.estado === 'Cumplida' ? '¡Meta cumplida!' : 'Avance registrado',
+      estado: fila.estado,
+      progreso: Number(fila.progreso || 0),
+    });
+  } catch (error) {
+    responderErrorSql(res, error, 'No se pudo registrar el avance');
+  }
+});
+
+// POST /cliente/metas/:id/cancelar
+router.post('/metas/:id/cancelar', async (req, res) => {
+  const idMeta = numeroValido(req.params.id);
+  if (!idMeta) return res.status(400).json({ error: 'El número de meta no es válido' });
+  try {
+    const pool = await conectar();
+    await pool.request()
+      .input('id_cliente', sql.Int, req.usuario.id_cliente)
+      .input('id_meta', sql.Int, idMeta)
+      .execute('usp_App_CancelarMeta');
+    res.json({ mensaje: 'Meta cancelada' });
+  } catch (error) {
+    responderErrorSql(res, error, 'No se pudo cancelar la meta');
   }
 });
 
