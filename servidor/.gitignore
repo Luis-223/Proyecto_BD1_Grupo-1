@@ -1,0 +1,12 @@
+# Librerías descargadas (se reinstalan con "npm install")
+node_modules/
+
+# Contraseñas y claves: NUNCA se suben
+.env
+
+# Registros de errores
+*.log
+
+# Archivos del sistema
+Thumbs.db
+.DS_Store
