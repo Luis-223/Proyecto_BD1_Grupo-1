@@ -6,7 +6,7 @@ from tkinter import ttk, messagebox         # Tablas y ventanas emergentes de av
 
 import customtkinter as ctk                 # Librería de interfaz moderna
 
-import conexion_bd as bd                    # TODO lo que habla con SQL Server está en conexion_bd.py
+import conexion_bd as bd                    # TODO lo que habla con el servidor está en conexion_bd.py
 import factura_pdf                          # Crea, abre e imprime el PDF de las facturas
 
 # ------------------------- CONFIGURACIÓN GLOBAL ------------------------------
@@ -308,13 +308,12 @@ class App(Ventana):
         self.geometry("1200x720")           # Tamaño inicial
         self.minsize(1000, 620)             # Tamaño mínimo permitido al redimensionar
 
-        # Datos de quien inició sesión (vienen de usp_Escritorio_DatosEmpleado)
+        # Datos de quien inició sesión (vienen de usp_Escritorio_DatosEmpleado).
+        # El id del empleado y de la sucursal NO se guardan aquí: el servidor los toma del token.
         self.usuario = empleado["nombre"]
-        self.id_usuario = empleado["id_usuario"]       # queda guardado en facturas y cambios
-        self.id_sucursal = empleado["id_sucursal"]     # la sucursal de esta computadora (ID_SUCURSAL en escritorio.env)
-        self.cerrar_sesion = False                     # True si se pulsa "Cerrar sesión"
-
         self.sucursal = empleado["sucursal"]
+        self.cerrar_sesion = False          # True si se pulsa "Cerrar sesión"
+
         self._pagina = 0                    # Sube cada vez que se cambia de página (para frenar las revisiones del chat)
         self._revisando = set()             # Revisiones automáticas en curso (para no amontonarlas)
 
@@ -333,9 +332,8 @@ class App(Ventana):
         barra.pack(fill="x", padx=20, pady=(12, 0))
         indicador = ctk.CTkFrame(barra, fg_color="#14532d", corner_radius=16)
         indicador.pack(side="right")
-        self.lbl_sucursal = ctk.CTkLabel(indicador, text=f"📍 Sucursal: {self.sucursal}",
-                                         font=("Segoe UI", 13, "bold"), text_color="#bbf7d0")
-        self.lbl_sucursal.pack(padx=14, pady=4)
+        ctk.CTkLabel(indicador, text=f"📍 Sucursal: {self.sucursal}",
+                     font=("Segoe UI", 13, "bold"), text_color="#bbf7d0").pack(padx=14, pady=4)
 
         # Aquí se dibuja el contenido de cada página; se limpia y rellena al cambiar de menú
         self.main = ctk.CTkFrame(derecha, fg_color="transparent")

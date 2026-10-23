@@ -1,8 +1,7 @@
-// servicios/cuentas.js — CONTRASEÑAS Y PALABRA CLAVE CON ARGON2
-// Aquí está la lógica de las cuentas. La usan dos "puertas":
-//   - rutas/auth.js   (peticiones JSON, para probar con PowerShell)
-//   - rutas/trama.js  (tramas FM|1|..., las que usa la app)
-// Así las dos se comportan exactamente igual.
+// servicios/cuentas.js — CUENTAS: INICIO DE SESIÓN, REGISTRO Y RECUPERACIÓN
+// Lo usan rutas/trama.js (tramas FM|1|... de la app móvil) y
+// rutas/escritorio.js (inicio de sesión de la app de escritorio).
+// Así las dos apps validan las contraseñas exactamente igual.
 //
 // Cómo se protegen las contraseñas:
 //   - La app manda la contraseña tal cual (nunca se guarda).
@@ -13,12 +12,12 @@
 //     sesión bien, su contraseña se pasa a Argon2 y el hash viejo
 //     se borra. Nadie tiene que cambiar su contraseña.
 
-const crypto = require('crypto');                // NUEVO: genera el código de 6 dígitos al azar
+const crypto = require('crypto');                // genera el código de 6 dígitos al azar
 const argon2 = require('argon2');
 const { sql, conectar } = require('../db');
 const { crearToken, crearLimitador } = require('../seguridad');
 const { ErrorApp } = require('../errores');
-const correo = require('./correo');              // NUEVO: envía el código por correo
+const correo = require('./correo');              // envía el código por correo
 
 //  AJUSTES
 // Argon2id con los valores mínimos que recomienda OWASP:
@@ -37,7 +36,7 @@ const LARGO_MINIMO_PALABRA = 4;
 const limiteLogin = crearLimitador({ maximo: 5, minutos: 15 });
 const limiteRecuperar = crearLimitador({ maximo: 5, minutos: 15 });
 
-// NUEVO — Recuperación con código por correo
+// Recuperación con código por correo
 const MINUTOS_CODIGO = 10;                       // Vigencia del código (igual que en el SQL)
 const FORMATO_CODIGO = /^\d{6}$/;                // Exactamente 6 dígitos
 // Mismo mensaje exista o no el alias: así nadie averigua qué usuarios hay
@@ -73,6 +72,7 @@ function separarNombre(completo) {
     segundo: partes.slice(1).join(' ') || null,             // El resto (o null si no hay)
   };
 }
+
 // Si el alias no existe igual se hace un cálculo Argon2 (contra un hash
 // falso). Así la respuesta tarda lo mismo y nadie puede averiguar qué
 // alias existen midiendo el tiempo.
@@ -145,22 +145,6 @@ async function comprobarContrasena(pool, alias, contrasena) {
   await gastarTiempoIgual(contrasena);
   await registrarIntento(pool, credencial.id_alias, false);
   return null;
-}
-
-// Revisa la contraseña actual en cambios con sesión iniciada, con el
-// mismo límite de intentos que el login
-async function exigirContrasenaActual(pool, usuario, contrasena) {
-  const espera = limiteLogin.minutosBloqueado(usuario.alias);
-  if (espera > 0) {
-    throw new ErrorApp('INTENTOS', `Demasiados intentos. Intenta de nuevo en ${espera} minutos.`);
-  }
-  const idAlias = await comprobarContrasena(pool, usuario.alias, contrasena);
-  if (!idAlias) {
-    limiteLogin.registrarFallo(usuario.alias);
-    throw new ErrorApp('CREDENCIALES', 'La contraseña actual no es correcta');
-  }
-  limiteLogin.limpiar(usuario.alias);
-  return idAlias;
 }
 
 // INICIAR SESIÓN
@@ -300,7 +284,7 @@ async function recuperarContrasena(aliasRecibido, palabraRecibida, nuevaRecibida
   return { mensaje: 'Contraseña actualizada. Ya puedes iniciar sesión.' };
 }
 
-// NUEVO — RECUPERAR CONTRASEÑA CON UN CÓDIGO POR CORREO (sin sesión)
+// RECUPERAR CONTRASEÑA CON UN CÓDIGO POR CORREO (sin sesión)
 // Paso 1: genera un código de 6 dígitos, guarda SOLO su hash y lo envía.
 async function enviarCodigoRecuperacion(aliasRecibido) {
   const alias = texto(aliasRecibido).trim();
@@ -400,66 +384,6 @@ async function recuperarConCodigo(aliasRecibido, codigoRecibido, nuevaRecibida) 
   return { mensaje: 'Contraseña actualizada. Ya puedes iniciar sesión.' };
 }
 
-// GUARDAR O CAMBIAR LA PALABRA CLAVE (con sesión iniciada)
-// Pide la contraseña actual: así, si alguien encuentra el teléfono
-// con la sesión abierta, no puede cambiar la palabra clave.
-async function guardarPalabraClave(usuario, contrasenaActualRecibida, palabraRecibida, idPreguntaRecibida) {
-  const contrasenaActual = texto(contrasenaActualRecibida);
-  const palabra = normalizarPalabra(palabraRecibida);
-  const idPregunta = idPreguntaRecibida === undefined || idPreguntaRecibida === null || idPreguntaRecibida === ''
-    ? null
-    : Number(idPreguntaRecibida);
-
-  if (!contrasenaActual || !palabra) {
-    throw new ErrorApp('DATOS', 'Escribe tu contraseña actual y tu palabra clave');
-  }
-  if (palabra.length < LARGO_MINIMO_PALABRA) {
-    throw new ErrorApp('DATOS', `La palabra clave debe tener al menos ${LARGO_MINIMO_PALABRA} caracteres`);
-  }
-  if (idPregunta !== null && (!Number.isInteger(idPregunta) || idPregunta <= 0)) {
-    throw new ErrorApp('DATOS', 'La pregunta de seguridad no es válida');
-  }
-  if (!usuario || !usuario.alias) {
-    throw new ErrorApp('SESION', 'La sesión expiró o no es válida. Inicia sesión otra vez.');
-  }
-
-  const pool = await conectar();
-  const idAlias = await exigirContrasenaActual(pool, usuario, contrasenaActual);
-
-  const hash = await argon2.hash(palabra, OPCIONES_ARGON2);
-  await pool.request()
-    .input('id_alias', sql.Int, idAlias)
-    .input('id_pregunta', sql.Int, idPregunta)
-    .input('respuesta_argon2', sql.VarChar(255), hash)
-    .execute('usp_GuardarRespuestaSeguridad');
-  return { mensaje: 'Palabra clave guardada' };
-}
-
-// CAMBIAR LA CONTRASEÑA (con sesión iniciada)
-async function cambiarContrasena(usuario, actualRecibida, nuevaRecibida) {
-  const actual = texto(actualRecibida);
-  const nueva = texto(nuevaRecibida);
-
-  if (!actual || !nueva) throw new ErrorApp('DATOS', 'Escribe tu contraseña actual y la nueva');
-  validarContrasenaNueva(nueva);
-  if (actual === nueva) throw new ErrorApp('DATOS', 'La contraseña nueva debe ser distinta de la actual');
-  if (!usuario || !usuario.alias) {
-    throw new ErrorApp('SESION', 'La sesión expiró o no es válida. Inicia sesión otra vez.');
-  }
-
-  const pool = await conectar();
-  const idAlias = await exigirContrasenaActual(pool, usuario, actual);
-
-  await guardarContrasena(pool, idAlias, nueva);
-  return { mensaje: 'Contraseña cambiada' };
-}
-
-// LISTA DE PREGUNTAS DE SEGURIDAD (sin sesión)
-async function listarPreguntas() {
-  const pool = await conectar();
-  const resultado = await pool.request().execute('usp_ListarPreguntasSeguridad');
-  return resultado.recordset; // [{ id_pregunta, texto_pregunta }]
-}
 // LISTAS PARA EL REGISTRO (sin sesión): todo lo que la app necesita para sus desplegables
 async function listarCatalogos() {
   const pool = await conectar();
@@ -468,7 +392,7 @@ async function listarCatalogos() {
   const [generos, departamentos, municipios, sucursales, metodosPago, membresias, preguntas] = r.recordsets;
   return { generos, departamentos, municipios, sucursales, metodosPago, membresias, preguntas };
 }
-// REGISTRAR UNA CUENTA NUEVA (sin sesión)
+
 // "5" → 5   |   "abc", "0", "-3", "" → null
 const aEntero = (valor) => {
   const n = Number(valor);
@@ -510,7 +434,7 @@ async function registrarCuenta(d) {
   if (!FORMATO_FECHA.test(fecha)) {
     throw new ErrorApp('DATOS', 'La fecha de nacimiento debe tener el formato AAAA-MM-DD');
   }
-  if (new Date(fecha) > new Date()) {                  // NUEVO: nada de fechas futuras
+  if (new Date(fecha) > new Date()) {                  // nada de fechas futuras
     throw new ErrorApp('DATOS', 'La fecha de nacimiento no puede ser futura');
   }
   validarContrasenaNueva(contrasena);
@@ -564,14 +488,12 @@ async function registrarCuenta(d) {
     idUsuario: filas[0]?.id_usuario,
   };
 }
+
 module.exports = {
   iniciarSesion,
   recuperarContrasena,
-  enviarCodigoRecuperacion, // NUEVO
-  recuperarConCodigo,       // NUEVO
-  guardarPalabraClave,
-  cambiarContrasena,
-  listarPreguntas,
+  enviarCodigoRecuperacion,
+  recuperarConCodigo,
   registrarCuenta,
   listarCatalogos,
 };

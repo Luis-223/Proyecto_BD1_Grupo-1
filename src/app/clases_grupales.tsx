@@ -9,7 +9,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
-  ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,Image
+  ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { cancelarClase, inscribirClase, listarClases } from './conexion';
@@ -226,11 +226,6 @@ const styles = StyleSheet.create({
   centro: { flex: 1, backgroundColor: '#020700', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
   logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
-
-  botonRegresar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  textoRegresar: { color: '#00E676', fontSize: 14, fontWeight: 'bold' },
-  titulo: { fontSize: 22, fontWeight: 'bold', color: '#ffffff' },
-  subtitulo: { color: '#9a9a9a', fontSize: 13, marginTop: 4, marginBottom: 12 },
   seccion: { fontSize: 16, fontWeight: 'bold', color: '#00B0FF', marginTop: 12, marginBottom: 10 },
 
   aviso: { backgroundColor: '#3a2a00', borderRadius: 12, padding: 12, marginBottom: 10 },

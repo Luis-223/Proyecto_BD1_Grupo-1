@@ -89,8 +89,8 @@ export default function Chat() {
     }, [traer])
   );
 
-  const enviar = async (contenido = texto) => {
-    const limpio = contenido.trim();
+  const enviar = async () => {
+    const limpio = texto.trim();
     if (!limpio || enviando) return;
     setEnviando(true);
     try {
@@ -120,7 +120,6 @@ export default function Chat() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.titulo} numberOfLines={1}>Recepción{sucursal ? ` · ${sucursal}` : ''}</Text>
-          
         </View>
       </View>
 
@@ -144,7 +143,6 @@ export default function Chat() {
             <View style={styles.vacio}>
               <Ionicons name="chatbubbles-outline" size={44} color="#555" />
               <Text style={styles.textoVacio}>Escríbele a tu sucursal</Text>
-              
             </View>
           }
           renderItem={({ item, index }) => {
@@ -182,7 +180,7 @@ export default function Chat() {
         />
         <TouchableOpacity
           style={[styles.botonEnviar, (!texto.trim() || enviando) && { opacity: 0.4 }]}
-          onPress={() => enviar()}
+          onPress={enviar}
           disabled={!texto.trim() || enviando}
         >
           {enviando ? <ActivityIndicator color="#020700" size="small" /> : <Ionicons name="send" size={20} color="#020700" />}
@@ -200,7 +198,6 @@ const styles = StyleSheet.create({
   botonVolver: { padding: 4 },
   avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#00E676', alignItems: 'center', justifyContent: 'center' },
   titulo: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
-  subtitulo: { color: '#9a9a9a', fontSize: 12 },
 
   cajaError: { backgroundColor: '#2a0f0f', borderColor: '#FF5252', borderWidth: 1, borderRadius: 10, padding: 10, margin: 10 },
   textoError: { color: '#ffffff', fontSize: 13 },
@@ -218,10 +215,6 @@ const styles = StyleSheet.create({
 
   vacio: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 40 },
   textoVacio: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
-  textoVacioSub: { color: '#9a9a9a', fontSize: 13 },
-  sugerencias: { marginTop: 14, gap: 8, alignItems: 'center' },
-  sugerencia: { borderWidth: 1, borderColor: '#00E676', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 7 },
-  textoSugerencia: { color: '#00E676', fontSize: 13 },
 
   barraEscribir: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, paddingBottom: 24, backgroundColor: '#0E170E', borderTopWidth: 1, borderTopColor: '#1F331F' },
   input: { flex: 1, backgroundColor: '#162216', color: '#ffffff', borderRadius: 20, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, fontSize: 15, maxHeight: 120, borderWidth: 1, borderColor: '#223822' },

@@ -2,7 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ReactNode, useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { consultarMembresia, listarSucursales, mensajesSinLeer } from './conexion';
-import { cerrarSesion, obtenerSesion } from './sesion'; // NUEVO: cerrarSesion se usaba sin importarlo
+import { cerrarSesion, obtenerSesion } from './sesion';
 
 type Item = { icono: string; titulo: string };
 
@@ -24,19 +24,19 @@ const menuExtra: Item[] = [
   { icono: '🗺️', titulo: 'Todas las sucursales' },
 ];
 
-// Pantalla de cada opción del menú (las que todavía no existen no hacen nada)
+// Pantalla que abre cada opción del menú
 const pantallas: Record<string, string> = {
   'Mi membresía': '/mi_membresia',
   'Mi rutina': '/mi_rutina',
   'Mi entrenador': '/mi_entrenador',
-  'Clases grupales': '/clases_grupales',     // NUEVO
+  'Clases grupales': '/clases_grupales',
   'Mis pagos': '/mis_pagos',
-  'Mi sucursal': '/mi_sucursal',             // NUEVO
-  'Todas las sucursales': '/sucursales',     // NUEVO
-  'Mis metas': '/mis_metas',                 // NUEVO
-  'Contactar recepción': '/chat',            // NUEVO: chat directo con la recepción de su sucursal
+  'Mi sucursal': '/mi_sucursal',
+  'Todas las sucursales': '/sucursales',
+  'Mis metas': '/mis_metas',
+  'Contactar recepción': '/chat',            // chat directo con la recepción de su sucursal
   'Entrenamiento': '/entrenamiento',
-  'Cambiar contraseña': '/cambio_contra', // CAMBIO: antes '/cambiocontra', pero el archivo es cambio_contra.tsx
+  'Cambiar contraseña': '/cambio_contra',
 };
 
 function formatearFecha(valor?: string | null): string {
@@ -50,19 +50,17 @@ export default function Perfil() {
   const params = useLocalSearchParams<{ nombre: string; rol: string; acceso: string }>();
   const sesion = obtenerSesion();
 
-  // CAMBIO: al volver desde mi_membresia con router.push('/perfil') no llegan params,
-  // así que se usan los datos guardados en la sesión
+  // Al volver desde otra pantalla no llegan params: se usan los datos de la sesión
   const nombre = params.nombre || sesion?.nombre || 'Usuario';
-  const rol = params.rol || sesion?.rol || '-';
   const acceso = sesion?.acceso || params.acceso; // la sesión se actualiza al pagar
   const membresiaVencida = acceso === 'LIMITADO';
   const [verMas, setVerMas] = useState(false);
 
-  // CAMBIO: membresía y vencimiento reales desde GET /cliente/membresia
+  // Membresía y vencimiento reales desde GET /cliente/membresia
   const [membresia, setMembresia] = useState<{ tipo: string; vence: string }>({ tipo: '...', vence: '...' });
-  // CAMBIO: antes era 'Chimaltenango' fijo; ahora es el nombre real de su sucursal
+  // Nombre real de su sucursal
   const [sucursal, setSucursal] = useState<string>('...');
-  // NUEVO: mensajes de recepción que el cliente todavía no ha leído
+  // Mensajes de recepción que el cliente todavía no ha leído
   const [sinLeer, setSinLeer] = useState(0);
 
   useFocusEffect(
@@ -102,7 +100,6 @@ export default function Perfil() {
           <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
           <Text style={styles.subtitulo}>Membresía {membresia.tipo}</Text>
         </View>
-        
       </View>
 
       {/* Aviso de membresía vencida (acceso LIMITADO) */}
@@ -146,16 +143,14 @@ export default function Perfil() {
         <Text style={styles.botonVerMasTexto}>{verMas ? 'Ver menos' : 'Ver más'}</Text>
       </Pressable>
 
-      {/* Secciones desplegables */}
-      {/* El globito también sale en la cabecera, para verlo aunque la sección esté cerrada */}
+      {/* Secciones desplegables. El globito también sale en la cabecera, para verlo aunque la sección esté cerrada */}
       <Seccion icono="❓" titulo="Ayuda y soporte técnico" contador={sinLeer}>
         <FilaMenu item={{ icono: '📞', titulo: 'Contactar recepción' }} onPress={() => abrir('Contactar recepción')} contador={sinLeer} />
-
       </Seccion>
 
       <Seccion icono="⚙️" titulo="Configuración y privacidad">
         <FilaMenu item={{ icono: '🔑', titulo: 'Cambiar contraseña' }} onPress={() => abrir('Cambiar contraseña')} />
-        {/* CAMBIO: replace('/') en vez de back(): después de pasar por mi_membresia, back() no regresa al login */}
+        {/* replace('/') en vez de back(): después de pasar por otras pantallas, back() no regresa al login */}
         <FilaMenu item={{ icono: '🚪', titulo: 'Cerrar sesión' }} onPress={() => { cerrarSesion(); router.replace('/'); }} />
       </Seccion>
     </ScrollView>
@@ -167,7 +162,7 @@ function FilaMenu({ item, onPress, contador = 0 }: { item: Item; onPress: () => 
     <Pressable style={styles.filaMenu} onPress={onPress}>
       <Text style={styles.filaMenuIcono}>{item.icono}</Text>
       <Text style={styles.filaMenuTitulo}>{item.titulo}</Text>
-      {/* NUEVO: globito con los mensajes sin leer */}
+      {/* Globito con los mensajes sin leer */}
       {contador > 0 && (
         <View style={styles.globo}>
           <Text style={styles.globoTexto}>{contador > 9 ? '9+' : contador}</Text>
@@ -214,7 +209,6 @@ const styles = StyleSheet.create({
   avatarLetra: { fontSize: 24, fontWeight: 'bold', color: '#030801' },
   nombre: { fontSize: 18, fontWeight: 'bold', color: '#ffffff' },
   subtitulo: { fontSize: 13, color: '#9a9a9a', marginTop: 2 },
-  chevronCaja: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' },
   chevron: { color: '#ffffff', fontSize: 20 },
 
   tarjetaDatos: { backgroundColor: '#1a1a1a', borderRadius: 16, padding: 14, marginTop: 12 },

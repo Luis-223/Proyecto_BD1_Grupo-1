@@ -6,10 +6,7 @@ require('dotenv').config(); // 1. Cargar el .env ANTES que todo lo demás
 // HERRAMIENTAS
 const express = require('express'); // El servidor web
 const cors = require('cors'); // Permite que la app (otro dispositivo) se conecte
-const http = require('http'); // Socket.io necesita el servidor http "puro"
-const { Server } = require('socket.io'); // Tiempo real
 const { conectar } = require('./db');
-const { configurarSocket } = require('./socket');
 
 // Sin la clave para firmar tokens el login no puede funcionar
 if (!process.env.JWT_SECRET) {
@@ -20,12 +17,12 @@ if (!process.env.JWT_SECRET) {
 // CREAR EL SERVIDOR
 const app = express();
 
-// MIDDLEWARES DE LECTURA Y SEGURIDAD
+// MIDDLEWARES DE LECTURA
+// Las tramas de texto las lee su propia ruta (rutas/trama.js, máximo 10 KB)
 app.use(cors()); // Aceptar peticiones de la app móvil
-app.use(express.json()); // Entender datos JSON
-app.use(express.text({ type: ['text/plain', 'text/*'] })); // OPTIMIZACIÓN: Permite procesar de inmediato las tramas de texto
+app.use(express.json()); // Entender datos JSON (rutas /cliente, /clases y /escritorio)
 
-// OPTIMIZACIÓN DE RESPUESTA RÁPIDA EN TRAMAS (Evita delay de socket/Keep-Alive)
+// RESPUESTA RÁPIDA EN TRAMAS (evita la espera del Keep-Alive)
 app.use('/trama', (req, res, next) => {
   res.setHeader('Connection', 'close'); // Fuerza el cierre del canal al responder
   if (req.socket) {
@@ -33,11 +30,6 @@ app.use('/trama', (req, res, next) => {
   }
   next();
 });
-
-const servidorHttp = http.createServer(app);
-const io = new Server(servidorHttp, { cors: { origin: '*' } });
-configurarSocket(io);
-app.set('io', io); // Así las rutas pueden mandar avisos en tiempo real
 
 // RUTAS DE PRUEBA
 // GET / -> Confirma que el servidor está encendido
@@ -58,9 +50,8 @@ app.get('/salud', async (req, res) => {
 });
 
 // RUTAS DE CADA SECCIÓN
-app.use('/trama', require('./rutas/trama')); // TRAMAS: lo que usa la app (FM|1|...)
-app.use('/auth', require('./rutas/auth')); // Inicio de sesión y palabra clave
-app.use('/cliente', require('./rutas/cliente')); // Membresía, rutinas, metas, notificaciones
+app.use('/trama', require('./rutas/trama')); // TRAMAS: acceso, registro, recuperación y pago (FM|1|...)
+app.use('/cliente', require('./rutas/cliente')); // Membresía, pagos, sucursales, rutinas, entrenadores, metas, chat
 app.use('/clases', require('./rutas/clases')); // Clases grupales e inscripción
 app.use('/escritorio', require('./rutas/escritorio')); // App de escritorio de las sucursales (PRINCIPAL.py)
 
@@ -71,7 +62,7 @@ app.use((req, res) => {
 });
 
 // JSON o formato mal escrito
-app.use((error, req, res, next) => {
+app.use((error, req, res, next) => { // eslint-disable-line no-unused-vars
   if (error.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'El formato de los datos enviados no es válido' });
   }
@@ -79,7 +70,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'Error inesperado en el servidor' });
 });
 
-// ENCENDER EL SERVIDOR Y PRECALENTAR CONEXIÓN A BASE DE DATOS
+// ENCENDER EL SERVIDOR Y PRECALENTAR LA CONEXIÓN A LA BASE DE DATOS
 const PUERTO = Number(process.env.PORT) || 3000;
 // En la PC: 0.0.0.0 (el teléfono se conecta por la red local)
 // En el servidor: HOST=127.0.0.1 (solo Apache llega a Node; desde internet se entra por HTTPS)
@@ -87,17 +78,17 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 async function arrancarServidor() {
   try {
-    // Inicializar pool de base de datos desde el arranque
+    // Abrir el pool de la base desde el arranque (Azure tarda en despertar)
     await conectar();
     console.log('Conexión inicial a la Base de Datos establecida.');
 
-    servidorHttp.listen(PUERTO, HOST, () => {
+    app.listen(PUERTO, HOST, () => {
       console.log(`Servidor FitManager corriendo en http://${HOST}:${PUERTO}`);
     });
   } catch (err) {
     console.error('Error al conectar a la Base de Datos al iniciar:', err);
-    // Arrancar el servidor HTTP aun si falla la BD para permitir diagnóstico
-    servidorHttp.listen(PUERTO, HOST, () => {
+    // Arrancar el servidor HTTP aun si falla la BD para permitir diagnóstico (/salud)
+    app.listen(PUERTO, HOST, () => {
       console.log(`Servidor iniciado en puerto ${PUERTO} (Sin conexión a BD)`);
     });
   }

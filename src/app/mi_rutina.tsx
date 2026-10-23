@@ -2,10 +2,9 @@
 // mi_rutina.tsx — RUTINAS DEL CLIENTE DESDE LA BASE DE DATOS
 //   Lista:   GET /cliente/rutinas      (nombre, entrenador, fecha)
 //   Detalle: GET /cliente/rutinas/:id  (días → ejercicios → series)
-// CAMBIO: antes mostraba una rutina de prueba fija (setTimeout).
 // =============================================================
 
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Pressable, RefreshControl,

@@ -1,5 +1,5 @@
-
-require('dotenv').config(); // lee los datos del archivo .env
+// db.js — CONEXIÓN A SQL SERVER / AZURE SQL
+// El .env ya lo cargó server.js antes de requerir este archivo.
 const sql = require('mssql'); // librería para hablar con SQL Server
 
 // DATOS DE CONEXIÓN (salen del .env, nunca escritos aquí)
@@ -27,7 +27,6 @@ const configuracion = {
   },
 };
 
-
 // CONECTAR
 // La primera vez abre la conexión; las siguientes devuelve la misma.
 // Si falla, la olvida para volver a intentarlo en la próxima petición.
@@ -49,18 +48,5 @@ function conectar() {
   return conexion;
 }
 
-
-// RESPONDER ERRORES DE LA BASE DE DATOS
-// Los procedimientos del equipo de BD usan THROW con números
-// 50000 o más y un mensaje claro (ej: "La clase ya no tiene cupo.").
-// Esos mensajes se pasan tal cual a la app. Cualquier otro error
-// se muestra en la terminal y la app recibe un mensaje general.
-function responderErrorSql(res, error, mensajeGeneral) {
-  if (error && error.number >= 50000) {
-    return res.status(400).json({ error: error.message });
-  }
-  console.error(error);
-  return res.status(500).json({ error: mensajeGeneral });
-}
-
-module.exports = { sql, conectar, responderErrorSql };
+// Los errores de la base (THROW 50000 o más) los traduce errores.js
+module.exports = { sql, conectar };

@@ -21,8 +21,8 @@
 
 const express = require('express');
 const cuentas = require('../servicios/cuentas');
-const membresias = require('../servicios/membresias'); // NUEVO
-const recuperacion = require('../servicios/recuperacion'); // NUEVO: pasos 1 y 2 de r_contra.tsx
+const membresias = require('../servicios/membresias');
+const recuperacion = require('../servicios/recuperacion'); // pasos 1 y 2 de r_contra.tsx
 const { leerToken } = require('../seguridad');
 const { traducirError } = require('../errores');
 
@@ -61,7 +61,6 @@ function sesion(datos) {
 const TIPOS = {
   // LOGIN_REQ: alias | contraseña
   // LOGIN_RES: idUsuario | nombre | rol | token | acceso
-  //   (los primeros 3 son los que ya lee trama.ts; token y acceso son nuevos)
   //   rol    = roles separados por coma, ej. "Cliente"
   //   acceso = COMPLETO o LIMITADO (membresía vencida)
   LOGIN: {
@@ -75,30 +74,7 @@ const TIPOS = {
     },
   },
 
-  // SESION_REQ: token          -> ¿sigue válida la sesión? (al abrir la app)
-  // SESION_RES: idUsuario | rol | acceso
-  SESION: {
-    campos: 3,
-    async ejecutar(datos) {
-      const u = sesion(datos);
-      return {
-        detalle: 'Sesión válida',
-        campos: [u.id_usuario, (u.roles || []).join(','), (u.acceso || 'completo').toUpperCase()],
-      };
-    },
-  },
-
-  // RECUPERAR_REQ: alias | palabra clave | contraseña nueva
-  // RECUPERAR_RES: (sin campos extra)
-  RECUPERAR: {
-    campos: 0,
-    async ejecutar([alias, palabra, nueva]) {
-      const r = await cuentas.recuperarContrasena(alias, palabra, nueva);
-      return { detalle: r.mensaje, campos: [] };
-    },
-  },
-
-  // NUEVO — Recuperar contraseña, paso 1 (r_contra.tsx)
+  // Recuperar contraseña con la pregunta de seguridad (r_contra.tsx), paso 1
   // PREGUNTA_ALIAS_REQ: alias
   // PREGUNTA_ALIAS_RES: idPregunta | texto de la pregunta
   PREGUNTA_ALIAS: {
@@ -109,10 +85,9 @@ const TIPOS = {
     },
   },
 
-  // NUEVO — Recuperar contraseña, paso 2: revisa la respuesta SIN cambiar nada
+  // Paso 2: revisa la respuesta SIN cambiar nada
   // VERIFICAR_RESPUESTA_REQ: alias | idPregunta | palabra clave
   // VERIFICAR_RESPUESTA_RES: (sin campos extra)
-  // El paso 3 usa RECUPERAR_REQ (alias | palabra clave | contraseña nueva).
   VERIFICAR_RESPUESTA: {
     campos: 0,
     async ejecutar([alias, idPregunta, palabra]) {
@@ -121,7 +96,18 @@ const TIPOS = {
     },
   },
 
-  // NUEVO — Recuperar contraseña por CORREO, paso 1 (correo.tsx)
+  // Paso 3: guarda la contraseña nueva (vuelve a revisar la palabra clave)
+  // RECUPERAR_REQ: alias | palabra clave | contraseña nueva
+  // RECUPERAR_RES: (sin campos extra)
+  RECUPERAR: {
+    campos: 0,
+    async ejecutar([alias, palabra, nueva]) {
+      const r = await cuentas.recuperarContrasena(alias, palabra, nueva);
+      return { detalle: r.mensaje, campos: [] };
+    },
+  },
+
+  // Recuperar contraseña por CORREO (correo.tsx), paso 1
   // CODIGO_ENVIAR_REQ: alias
   // CODIGO_ENVIAR_RES: (sin campos extra)
   //   Siempre responde lo mismo, exista o no el alias.
@@ -133,7 +119,7 @@ const TIPOS = {
     },
   },
 
-  // NUEVO — Recuperar contraseña por CORREO, paso 2 (correo.tsx)
+  // Paso 2
   // CODIGO_VERIFICAR_REQ: alias | código de 6 dígitos | contraseña nueva
   // CODIGO_VERIFICAR_RES: (sin campos extra)
   CODIGO_VERIFICAR: {
@@ -144,50 +130,17 @@ const TIPOS = {
     },
   },
 
-  // PREGUNTAS_REQ: (sin campos)
-  // PREGUNTAS_RES: lista "idPregunta^texto~idPregunta^texto"
-  PREGUNTAS: {
-    campos: 1,
-    async ejecutar() {
-      const preguntas = await cuentas.listarPreguntas();
-      return {
-        detalle: `${preguntas.length} preguntas`,
-        campos: [lista(preguntas.map((p) => [p.id_pregunta, p.texto_pregunta]))],
-      };
-    },
-  },
-
-  // PALABRA_CLAVE_REQ: token | contraseña actual | palabra clave | idPregunta (opcional)
-  // PALABRA_CLAVE_RES: (sin campos extra)
-  PALABRA_CLAVE: {
-    campos: 0,
-    async ejecutar(datos) {
-      const u = sesion(datos);
-      const [, actual, palabra, idPregunta] = datos;
-      const r = await cuentas.guardarPalabraClave(u, actual, palabra, idPregunta);
-      return { detalle: r.mensaje, campos: [] };
-    },
-  },
-
-  // CAMBIAR_CLAVE_REQ: token | contraseña actual | contraseña nueva
-  // CAMBIAR_CLAVE_RES: (sin campos extra)
-  CAMBIAR_CLAVE: {
-    campos: 0,
-    async ejecutar(datos) {
-      const u = sesion(datos);
-      const [, actual, nueva] = datos;
-      const r = await cuentas.cambiarContrasena(u, actual, nueva);
-      return { detalle: r.mensaje, campos: [] };
-    },
-  },
-
+  // SIGNUP_REQ: 19 campos en el orden de construirSignupReq (trama.ts).
+  //   Las posiciones 16 y 17 (tarjeta y CVV) la app las manda vacías y
+  //   el servidor no las lee: los datos de tarjeta nunca se guardan.
+  // SIGNUP_RES: idUsuario
   SIGNUP: {
-    campos: 1,                                         // Devuelve una casilla: el id del usuario nuevo
+    campos: 1,
     async ejecutar([
-      alias, correo, contrasena, nombre, apellidos,    // El orden DEBE ser el mismo de construirSignupReq
+      alias, correo, contrasena, nombre, apellidos,
       fechaNacimiento, genero, dpiNit, telefono,
       departamento, municipio, sucursal, metodoPago,
-      membresia, meses, tarjeta, cvv, idPregunta, palabra,
+      membresia, meses, , , idPregunta, palabra,
     ]) {
       const r = await cuentas.registrarCuenta({
         alias, correo, contrasena, nombre, apellidos,
@@ -199,7 +152,6 @@ const TIPOS = {
     },
   },
 
-  // NUEVO — antes no existía y la app recibía "Tipo de trama desconocido: MEMBRESIA"
   // MEMBRESIA_REQ: token | idMetodoPago (o SUCURSAL) | idTipoMembresia | meses | esCambioTipo
   // MEMBRESIA_RES: pagadoHasta (AAAA-MM-DD) | token nuevo | acceso
   //   No usa soloAccesoCompleto: quien tiene la membresía vencida (LIMITADO)
@@ -238,7 +190,8 @@ const TIPOS = {
     },
   },
 };
-// 3. RECIBIR UNA TRAMA
+
+// RECIBIR UNA TRAMA
 // Siempre responde HTTP 200 con una trama: el resultado real va en
 // el campo "código". Solo se acepta texto (máximo 10 KB).
 router.post('/', express.text({ type: () => true, limit: '10kb' }), async (req, res) => {
@@ -248,7 +201,7 @@ router.post('/', express.text({ type: () => true, limit: '10kb' }), async (req, 
   const c = texto.split(SEP);
   const idMensaje = c[3] || '0';
 
-  //¿Tiene la forma FM|1|ALGO_REQ|id ?
+  // ¿Tiene la forma FM|1|ALGO_REQ|id ?
   if (c.length < 4 || c[0] !== PROTOCOLO || c[1] !== VERSION || !/^[A-Z_]+_REQ$/.test(c[2]) || !c[3]) {
     return res.send(armarTrama('ERROR', idMensaje, '05', 'Trama inválida', []));
   }
@@ -270,8 +223,6 @@ router.post('/', express.text({ type: () => true, limit: '10kb' }), async (req, 
     if (t.inesperado) console.error(error);
     res.send(armarTrama(tipo, idMensaje, t.trama, t.mensaje, vacios));
   }
-
 });
-
 
 module.exports = router;

@@ -6,9 +6,8 @@
 // =============================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'expo-router';
 import {
-  ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,Image
+  ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { agregarEntrenador, listarEntrenadores, quitarEntrenador } from './conexion';
@@ -29,7 +28,6 @@ function textoExperiencia(e: Entrenador): string {
 }
 
 export default function MiEntrenador() {
-  const router = useRouter();
   const [entrenadores, setEntrenadores] = useState<Entrenador[]>([]);
   const [cargando, setCargando] = useState<boolean>(true);
   const [refrescando, setRefrescando] = useState<boolean>(false);
@@ -61,7 +59,6 @@ export default function MiEntrenador() {
   const visibles = entrenadores.filter((e) => especialidad === TODAS || e.especialidad?.trim() === especialidad);
   const mios = visibles.filter((e) => e.asignado);
   const disponibles = visibles.filter((e) => !e.asignado);
-  const totalMios = entrenadores.filter((e) => e.asignado).length;
 
   const agregar = async (e: Entrenador) => {
     setProcesando(e.id_entrenador);
@@ -101,8 +98,6 @@ export default function MiEntrenador() {
     );
   };
 
-  const volver = () => (router.canGoBack() ? router.back() : router.replace('/perfil'));
-
   if (cargando) {
     return (
       <View style={styles.centro}>
@@ -119,7 +114,7 @@ export default function MiEntrenador() {
       refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => cargar(true)} tintColor="#00E676" colors={['#00E676']} />}
     >
       <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
-      
+
       {error !== '' && (
         <Pressable style={styles.cajaError} onPress={() => cargar()}>
           <Text style={styles.textoError}>{error}</Text>
@@ -229,10 +224,6 @@ const styles = StyleSheet.create({
   centro: { flex: 1, backgroundColor: '#020700', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
   logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
-  botonRegresar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  textoRegresar: { color: '#00E676', fontSize: 14, fontWeight: 'bold' },
-  tituloHeader: { fontSize: 22, fontWeight: 'bold', color: '#ffffff' },
-  subtitulo: { color: '#9a9a9a', fontSize: 13, marginTop: 4, marginBottom: 12 },
   seccion: { fontSize: 16, fontWeight: 'bold', color: '#00B0FF', marginTop: 12, marginBottom: 10 },
 
   filaFiltros: { flexGrow: 0, marginBottom: 6 },

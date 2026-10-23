@@ -8,10 +8,10 @@
 // =============================================================
 
 import { useCallback, useState } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView,
-  StyleSheet, Text, TextInput, TouchableOpacity, View,Image
+  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView,
+  StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { cancelarMeta, crearMeta, listarMetas, registrarAvance } from './conexion';
@@ -76,7 +76,6 @@ function textoDias(m: Meta): string {
 }
 
 export default function MisMetas() {
-  const router = useRouter();
   const [metas, setMetas] = useState<Meta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
@@ -133,7 +132,6 @@ export default function MisMetas() {
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => cargar(true)} tintColor="#00E676" colors={['#00E676']} />}
       >
-        
         <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
         <Text style={styles.subtitulo}>{enProgreso.length} en progreso · {cumplidas} {cumplidas === 1 ? 'cumplida' : 'cumplidas'}</Text>
 
@@ -431,9 +429,6 @@ const styles = StyleSheet.create({
   centro: { flex: 1, backgroundColor: '#020700', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
   logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
-  botonRegresar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  textoRegresar: { color: '#00E676', fontSize: 14, fontWeight: 'bold' },
-  titulo: { fontSize: 22, fontWeight: 'bold', color: '#ffffff' },
   subtitulo: { color: '#9a9a9a', fontSize: 13, marginTop: 4, marginBottom: 14 },
   seccion: { fontSize: 16, fontWeight: 'bold', color: '#00B0FF' },
   filaHistorial: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 10 },

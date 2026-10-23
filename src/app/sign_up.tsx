@@ -46,14 +46,14 @@ export default function sign_up() {
   const [nombreUsuario, setNombreUsuario] = useState<string>('');
   const [apellidosUsuario, setApellidosUsuario] = useState<string>('');
   const [fechaNacimiento, setFechaNacimiento] = useState<string>('');
-  
+
   // CAMPO ÚNICO DE DPI
   const [dpiUsuario, setDpiUsuario] = useState<string>('');
 
   const [telefonoUsuario, setTelefonoUsuario] = useState<string>('');
-  const [preguntaUsuario, setPreguntaUsuario] = useState<string>(''); 
+  const [preguntaUsuario, setPreguntaUsuario] = useState<string>('');
 
-  // Campos de tarjeta
+  // Campos de tarjeta (solo se validan en pantalla; nunca se envían al servidor)
   const [fechaExpiracion, setFechaExpiracion] = useState<string>('');
   const [cvv, setCvv] = useState<string>('');
   const [numeroTarjeta, setNumeroTarjeta] = useState<string>('');
@@ -63,11 +63,11 @@ export default function sign_up() {
   const [departamentoUsuario, setDepartamentoUsuario] = useState<string>('');
   const [municipioUsuario, setMunicipioUsuario] = useState<string>('');
   const [sucursalUsuario, setSucursalUsuario] = useState<string>('');
-  const [membresiaUsuario, setMembresiaUsuario] = useState<string>(''); 
-  const [mesPagado, setMesPagado] = useState<string>('1'); 
+  const [membresiaUsuario, setMembresiaUsuario] = useState<string>('');
+  const [mesPagado, setMesPagado] = useState<string>('1');
   const [metodoPago, setMetodoPago] = useState<string>('SUCURSAL');
-  const [seleccionPregunta, setSeleccionPregunta] = useState<string>(''); 
-  
+  const [seleccionPregunta, setSeleccionPregunta] = useState<string>('');
+
   const esTarjeta = metodoPago === 'TARJETA';
 
   const mesesInt = parseInt(mesPagado || '1');
@@ -77,8 +77,8 @@ export default function sign_up() {
   // --- MÁSCARAS DE ENTRADA ---
   const manejarCambioTelefono = (texto: string) => {
     const soloNumeros = texto.replace(/\D/g, '');
-    const numerosLocales = soloNumeros.startsWith('502') 
-      ? soloNumeros.slice(3, 11) 
+    const numerosLocales = soloNumeros.startsWith('502')
+      ? soloNumeros.slice(3, 11)
       : soloNumeros.slice(0, 8);
 
     if (numerosLocales.length === 0) {
@@ -216,8 +216,8 @@ export default function sign_up() {
         metodoFinal,
         membresiaFinal,
         mesesFinal,
-        '', 
-        '', 
+        '',   // número de tarjeta: no se envía
+        '',   // CVV: no se envía
         seleccionPregunta,
         preguntaUsuario.trim()
       );
@@ -263,13 +263,12 @@ export default function sign_up() {
 
   const iniciarSesion1 = () => {
     router.push('/');
-    return;
   };
 
   return (
     <View style={styles.container}>
       <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
-      
+
       {/* PASO 1 */}
       <ScrollView horizontal={false} showsVerticalScrollIndicator={true} contentContainerStyle={styles.scrollContent} style={[styles.scrollBase, paso !== 1 && styles.oculto]}>
         <TextInput
@@ -286,7 +285,7 @@ export default function sign_up() {
           onChangeText={setCorreoUsuario}
           autoCapitalize="none"
         />
-        
+
         <View style={styles.inputConIconoContainer}>
           <TextInput
             style={styles.inputConIconoText}
@@ -295,14 +294,14 @@ export default function sign_up() {
             onChangeText={setContrasena1}
             secureTextEntry={!mostrarContrasena}
           />
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => setMostrarContrasena(!mostrarContrasena)}
             style={styles.botonIcono}
           >
-            <Ionicons 
-              name={mostrarContrasena ? 'eye-off-outline' : 'eye-outline'} 
-              size={22} 
-              color="#666666" 
+            <Ionicons
+              name={mostrarContrasena ? 'eye-off-outline' : 'eye-outline'}
+              size={22}
+              color="#666666"
             />
           </TouchableOpacity>
         </View>
@@ -316,7 +315,7 @@ export default function sign_up() {
               <Button title="Siguiente" onPress={avanzarPaso1} />
             </View>
         </View>
-        
+
         <Text style={styles.link} onPress={iniciarSesion1}>
           {'¿Ya tienes cuenta? Inicia sesión'}
         </Text>
@@ -343,8 +342,8 @@ export default function sign_up() {
           onChangeText={setApellidosUsuario}
           autoCapitalize="words"
         />
-        <Pressable 
-          style={styles.input} 
+        <Pressable
+          style={styles.input}
           onPress={() => setMostrarDatePicker(true)}
         >
           {mostrarDatePicker && (
@@ -365,7 +364,7 @@ export default function sign_up() {
             {fechaNacimiento ? fechaNacimiento : 'Seleccionar Fecha de Nacimiento'}
           </Text>
         </Pressable>
-        
+
         <Dropdown
           style={styles.dropdown}
           data={opcionesGenero}
@@ -442,7 +441,7 @@ export default function sign_up() {
             <Button title="Siguiente" onPress={avanzarPaso2} />
           </View>
         </View>
-        
+
         <Text style={styles.link} onPress={iniciarSesion1}>
           {'¿Ya tienes cuenta? Inicia sesión'}
         </Text>
@@ -458,8 +457,8 @@ export default function sign_up() {
         <Text style={styles.label}>Método de Pago:</Text>
         <RadioButton.Group onValueChange={newValue => setMetodoPago(newValue)} value={metodoPago}>
           <View style={styles.contenedorHorizontal}>
-            <TouchableOpacity 
-              style={styles.filaOpcionHorizontal} 
+            <TouchableOpacity
+              style={styles.filaOpcionHorizontal}
               onPress={() => setMetodoPago('SUCURSAL')}
               activeOpacity={0.7}
             >
@@ -467,8 +466,8 @@ export default function sign_up() {
               <Text style={styles.textoOpcion}>Pago en sucursal   </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.filaOpcionHorizontal} 
+            <TouchableOpacity
+              style={styles.filaOpcionHorizontal}
               onPress={() => setMetodoPago('TARJETA')}
               activeOpacity={0.7}
             >
@@ -479,23 +478,23 @@ export default function sign_up() {
         </RadioButton.Group>
 
         <Text style={[styles.label, !esTarjeta && styles.deshabilitadoTexto]}>Tipo de Membresía:</Text>
-        <RadioButton.Group 
-          onValueChange={newValue => esTarjeta && setMembresiaUsuario(newValue)} 
+        <RadioButton.Group
+          onValueChange={newValue => esTarjeta && setMembresiaUsuario(newValue)}
           value={membresiaUsuario}
         >
           <View style={styles.contenedorHorizontal}>
             {catalogos.membresias.map((m) => (
-              <TouchableOpacity 
+              <TouchableOpacity
                 key={m.value}
-                style={styles.filaOpcionHorizontal} 
+                style={styles.filaOpcionHorizontal}
                 onPress={() => esTarjeta && setMembresiaUsuario(m.value)}
                 activeOpacity={esTarjeta ? 0.7 : 1}
                 disabled={!esTarjeta}
               >
-                <RadioButton.Android 
-                  value={m.value} 
-                  color={esTarjeta ? "#00E676" : "#555"} 
-                  uncheckedColor={esTarjeta ? "#888" : "#444"} 
+                <RadioButton.Android
+                  value={m.value}
+                  color={esTarjeta ? "#00E676" : "#555"}
+                  uncheckedColor={esTarjeta ? "#888" : "#444"}
                   disabled={!esTarjeta}
                 />
                 <Text style={[styles.textoOpcion, !esTarjeta && styles.deshabilitadoTexto]}>
@@ -516,15 +515,15 @@ export default function sign_up() {
             value={mesPagado}
             disable={!esTarjeta}
             onChange={(item) => {
-              setMesPagado(item.value); 
+              setMesPagado(item.value);
             }}
           />
           <Text style={[styles.labelMeses, !esTarjeta && styles.deshabilitadoTexto]}>   Total a pagar Q.{totalPagar}</Text>
         </View>
 
         <View style={styles.filaInputs}>
-          <Pressable 
-            style={[styles.input, styles.inputMitad, !esTarjeta && styles.inputDeshabilitado]} 
+          <Pressable
+            style={[styles.input, styles.inputMitad, !esTarjeta && styles.inputDeshabilitado]}
             onPress={() => esTarjeta && setMostrarDatePickerTarjeta(true)}
             disabled={!esTarjeta}
           >
@@ -571,7 +570,7 @@ export default function sign_up() {
             placeholderTextColor="#888888"
             maxLength={19}
           />
-          
+
           <View style={styles.contenedorImagenesDerecha}>
             <Image source={require('../../assets/images/visa.png')} style={[styles.imagenDerecha, !esTarjeta && { opacity: 0.3 }]} />
           </View>
@@ -588,7 +587,7 @@ export default function sign_up() {
             <Button title="Siguiente" onPress={avanzarPaso3} />
           </View>
         </View>
-    
+
         <Text style={styles.link} onPress={iniciarSesion1}>
           {'¿Ya tienes cuenta? Inicia sesión'}
         </Text>
@@ -628,7 +627,7 @@ export default function sign_up() {
             <Button title={cargandoRegistro ? "Registrando..." : "Registrar"} onPress={finalizarRegistro} disabled={cargandoRegistro} />
           </View>
         </View>
-    
+
         <Text style={styles.link} onPress={iniciarSesion1}>
           {'¿Ya tienes cuenta? Inicia sesión'}
         </Text>
@@ -639,13 +638,12 @@ export default function sign_up() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#020700', padding: 14 },
-  oculto: { display: 'none' },  
+  oculto: { display: 'none' },
   scrollBase: { flex: 1 },
   scrollContent: { padding: 14, paddingBottom: 60 },
-  titulo: { fontSize: 28, fontWeight: 'bold', marginBottom: 24, textAlign: 'center', color: '#5e5f5f' },
   logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
   input: { borderWidth: 1, borderColor: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#ffffff' },
-  
+
   inputConIconoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -670,14 +668,12 @@ const styles = StyleSheet.create({
   botones: { flexDirection: 'row', justifyContent: 'center', gap: 12, alignItems: 'center', marginTop: 5, marginBottom: 8 },
   contenedorBoton: { flex: 0.45, marginHorizontal: 6 },
   link: { marginTop: 12, textAlign: 'center', color: '#5eb4ff', textDecorationLine: 'underline' },
-  mensaje: { marginTop: 16, textAlign: 'center', color: '#ffffff' },
   dropdown: { height: 50, padding: 12, borderColor: 'gray', borderWidth: 0.5, borderRadius: 8, paddingHorizontal: 8, backgroundColor: '#fff', marginBottom: 12 },
-  filaOpcion: { flexDirection: 'row', alignItems: 'center', marginVertical: -2 },
   label: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold', marginTop: 10, marginBottom: 4 },
   contenedorHorizontal: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 6 },
   filaOpcionHorizontal: { flexDirection: 'row', alignItems: 'center', marginRight: 16 },
   textoOpcion: { color: '#FFFFFF', fontSize: 14, marginLeft: 1 },
-  
+
   inputDeshabilitado: {
     backgroundColor: '#e0e0e0',
     borderColor: '#a0a0a0',

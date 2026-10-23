@@ -1,28 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert,Image } from 'react-native';
+import { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert, Image } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Accelerometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { obtenerSesion } from './sesion';
 
-// Función auxiliar para obtener el usuario actual (puedes adaptarla a tu gestor de sesión)
-const obtenerIdUsuarioActual = () => {
-  return 'Spartan223'; 
-};
+// Usuario que inició sesión: cada uno guarda sus récords con su propio id.
+function usuarioDeLaSesion() {
+  const sesion = obtenerSesion();
+  return {
+    id: sesion?.idUsuario ? String(sesion.idUsuario) : null,   // llave de los récords
+    nombre: sesion?.nombre || '',                              // lo que se muestra
+  };
+}
 
 export default function DeportesPodometro() {
   const [vista, setVista] = useState<'menu' | 'configIntervalo' | 'entreno' | 'registros'>('menu');
   const [tipoDeporte, setTipoDeporte] = useState<'caminar' | 'correr' | 'montar' | 'saltar'>('caminar');
-  
+
   // Métricas del entreno
   const [pasos, setPasos] = useState<number>(0);
   const [segundos, setSegundos] = useState<number>(0);
   const [enPausa, setEnPausa] = useState<boolean>(false);
-  
+
   // Configuración de Intervalos y Marcas Personales
   const [metaIntervaloKm, setMetaIntervaloKm] = useState<string>('1');
   const [marcasPersonales, setMarcasPersonales] = useState<any>({});
 
-  const usuarioActual = obtenerIdUsuarioActual();
+  const { id: usuarioActual, nombre: nombreUsuario } = usuarioDeLaSesion();
 
   // Cargar marcas personales exclusivas del usuario actual al iniciar
   useEffect(() => {
@@ -30,6 +35,10 @@ export default function DeportesPodometro() {
   }, [usuarioActual]);
 
   const cargarMarcasPersonales = async () => {
+    if (!usuarioActual) {        // sin sesión no hay récords que mostrar
+      setMarcasPersonales({});
+      return;
+    }
     try {
       const llaveUsuario = `@marcas_personales_${usuarioActual}`;
       const datos = await AsyncStorage.getItem(llaveUsuario);
@@ -128,6 +137,11 @@ export default function DeportesPodometro() {
   };
 
   const finalizarEntrenamiento = async () => {
+    if (!usuarioActual) {
+      Alert.alert('Sesión cerrada', 'Inicia sesión otra vez para guardar tus récords.');
+      setVista('menu');
+      return;
+    }
     try {
       const llaveUsuario = `@marcas_personales_${usuarioActual}`;
       const deporteActual = tipoDeporte;
@@ -141,7 +155,7 @@ export default function DeportesPodometro() {
 
       const actualizadas = { ...marcasPersonales, [deporteActual]: nuevaMarca };
       setMarcasPersonales(actualizadas);
-      
+
       await AsyncStorage.setItem(llaveUsuario, JSON.stringify(actualizadas));
 
       Alert.alert('Entrenamiento Guardado', 'Tus datos y marcas personales han sido actualizados con éxito.');
@@ -165,9 +179,9 @@ export default function DeportesPodometro() {
           { nombre: 'Intervalo', icono: 'flag-checkered' },
           { nombre: 'Saltar', icono: 'jump-rope' }
         ].map((item) => (
-          <TouchableOpacity 
+          <TouchableOpacity
             key={item.nombre}
-            style={styles.tarjetaDeporte} 
+            style={styles.tarjetaDeporte}
             onPress={() => iniciarActividad(item.nombre as any)}
           >
             <View style={styles.infoDeporte}>
@@ -181,8 +195,8 @@ export default function DeportesPodometro() {
         ))}
 
         {/* Botón para ver los registros guardados */}
-        <TouchableOpacity 
-          style={styles.botonRegistros} 
+        <TouchableOpacity
+          style={styles.botonRegistros}
           onPress={() => {
             cargarMarcasPersonales();
             setVista('registros');
@@ -202,9 +216,9 @@ export default function DeportesPodometro() {
     return (
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.headerTitulo}>Registros y Récords</Text>
-        <Text style={styles.subtituloUsuario}>Usuario: {usuarioActual}</Text>
+        <Text style={styles.subtituloUsuario}>{nombreUsuario ? `Usuario: ${nombreUsuario}` : 'Inicia sesión para ver tus récords'}</Text>
 
-        {deportesLista.map(( dep ) => {
+        {deportesLista.map((dep) => {
           const record = marcasPersonales[dep];
           return (
             <View key={dep} style={styles.tarjetaRegistro}>
@@ -259,17 +273,15 @@ export default function DeportesPodometro() {
   return (
     <ScrollView contentContainerStyle={styles.containerEntreno}>
       <View style={styles.filaMetrica}>
-        <MaterialCommunityIcons 
-          name={tipoDeporte === 'caminar' ? 'walk' : tipoDeporte === 'correr' ? 'run' : tipoDeporte === 'montar' ? 'bicycle' : 'jump-rope'} 
-          size={28} 
-          color="#00E676" 
+        <MaterialCommunityIcons
+          name={tipoDeporte === 'caminar' ? 'walk' : tipoDeporte === 'correr' ? 'run' : tipoDeporte === 'montar' ? 'bicycle' : 'jump-rope'}
+          size={28}
+          color="#00E676"
         />
         <Text style={styles.textoKm}>{kilometros} <Text style={styles.unidadKm}>Km</Text></Text>
       </View>
 
       <Text style={styles.textoCronometro}>{formatearTiempo(segundos)}</Text>
-
-      
 
       <View style={styles.bloqueSecundario}>
         <Text style={styles.textoSecundario}>{String(kilocalorias).padStart(3, '0')} <Text style={styles.unidadPequena}>Kcal</Text></Text>
@@ -277,16 +289,16 @@ export default function DeportesPodometro() {
       </View>
 
       <View style={styles.contenedorControles}>
-        <TouchableOpacity 
-          style={[styles.botonControl, { backgroundColor: '#00B0FF' }]} 
+        <TouchableOpacity
+          style={[styles.botonControl, { backgroundColor: '#00B0FF' }]}
           onPress={() => setEnPausa(!enPausa)}
         >
           <Ionicons name={enPausa ? "play" : "pause"} size={30} color="#f6f8f5" />
           <Text style={styles.textoBotonControl}>{enPausa ? "Reanudar" : "Pausa"}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.botonControl, { backgroundColor: '#FF3D00' }]} 
+        <TouchableOpacity
+          style={[styles.botonControl, { backgroundColor: '#FF3D00' }]}
           onPress={finalizarEntrenamiento}
         >
           <View style={styles.circuloDetener} />
@@ -449,11 +461,6 @@ const styles = StyleSheet.create({
     color: '#00E676',
     marginBottom: 15,
     letterSpacing: 1,
-  },
-  segmentoBarra: {
-    flex: 1,
-    height: '100%',
-    borderRadius: 2,
   },
   bloqueSecundario: {
     width: '100%',

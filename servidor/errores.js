@@ -38,7 +38,7 @@ function traducirError(error, mensajeGeneral = 'Error inesperado en el servidor'
   return { http: 500, trama: '99', mensaje: mensajeGeneral, inesperado: true };
 }
 
-// Para las rutas JSON: responde con el código HTTP correcto
+// Para las rutas JSON (/cliente, /clases y /escritorio): responde con el código HTTP correcto
 function responderError(res, error, mensajeGeneral) {
   const t = traducirError(error, mensajeGeneral);
   if (t.inesperado) console.error(error); // solo los inesperados ensucian la consola

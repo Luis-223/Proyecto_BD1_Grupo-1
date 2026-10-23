@@ -1,21 +1,17 @@
 // =============================================================
 // mi_sucursal.tsx — LA SUCURSAL DEL CLIENTE
-// Mapa del municipio donde está su sucursal, sus datos y accesos rápidos.
+// Mapa del municipio donde está su sucursal, sus datos y conteos.
 // Datos desde la base: GET /cliente/sucursales (la que tiene es_mia).
 // =============================================================
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
-import {
-  ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View,Image
-} from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import MapaSucursales, { abrirComoLlegar } from '@/components/mapa-sucursales';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MapaSucursales from '@/components/mapa-sucursales';
 import { listarSucursales } from './conexion';
 import type { Sucursal } from './conexion';
 
 export default function MiSucursal() {
-  const router = useRouter();
   const [sucursal, setSucursal] = useState<Sucursal | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -50,7 +46,7 @@ export default function MiSucursal() {
 
   return (
     <ScrollView style={styles.fondo} contentContainerStyle={styles.container}>
-       <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
+      <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
       {error !== '' && (
         <Pressable style={styles.cajaError} onPress={cargar}>
           <Text style={styles.textoError}>{error}</Text>
@@ -84,8 +80,6 @@ export default function MiSucursal() {
             <Numero valor={sucursal.clases_semana} etiqueta="Clases esta semana" />
             <Numero valor={sucursal.miembros} etiqueta="Miembros" />
           </View>
-
-         
         </>
       )}
     </ScrollView>
@@ -120,10 +114,6 @@ const styles = StyleSheet.create({
   centro: { flex: 1, backgroundColor: '#020700', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
 
-  botonRegresar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  textoRegresar: { color: '#00E676', fontSize: 14, fontWeight: 'bold' },
-  titulo: { fontSize: 22, fontWeight: 'bold', color: '#ffffff', marginBottom: 14 },
-
   nombre: { color: '#ffffff', fontSize: 20, fontWeight: 'bold' },
   filaLugar: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   lugar: { color: '#00E676', fontSize: 14 },
@@ -137,21 +127,6 @@ const styles = StyleSheet.create({
   numero: { flex: 1, backgroundColor: '#0E170E', borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#1F331F' },
   numeroValor: { color: '#00E676', fontSize: 22, fontWeight: 'bold' },
   numeroEtiqueta: { color: '#9a9a9a', fontSize: 11, marginTop: 2, textAlign: 'center' },
-
-  filaBotones: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  boton: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    borderRadius: 10, paddingVertical: 12, borderWidth: 1, borderColor: '#00E676', minHeight: 46,
-  },
-  botonPrincipal: { backgroundColor: '#00E676' },
-  textoBoton: { color: '#00E676', fontWeight: 'bold', fontSize: 15 },
-  textoBotonPrincipal: { color: '#020700', fontWeight: 'bold', fontSize: 15 },
-
-  enlace: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#1F331F', marginTop: 6,
-  },
-  textoEnlace: { color: '#ffffff', fontSize: 15 },
 
   cajaError: { backgroundColor: '#2a0f0f', borderColor: '#FF5252', borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12 },
   textoError: { color: '#ffffff', fontSize: 14 },

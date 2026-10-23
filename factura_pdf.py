@@ -85,7 +85,6 @@ def generar(datos, carpeta=CARPETA_FACTURAS):
     normal = estilo("normal")
     negrita = estilo("negrita", fontName="Helvetica-Bold")
     total_estilo = estilo("total", fontName="Helvetica-Bold", fontSize=13, leading=16, alignment=TA_RIGHT)
-    pie = estilo("pie", fontSize=8, leading=11, textColor=colors.HexColor(GRIS_TEXTO))
 
     ancho = letter[0] - 36 * mm      # ancho útil (márgenes de 18 mm)
     partes = []
@@ -177,7 +176,7 @@ def generar(datos, carpeta=CARPETA_FACTURAS):
             texto_pagos.append(renglon)
         partes += [Paragraph("FORMA DE PAGO", etiqueta), Spacer(1, 3), Paragraph("<br/>".join(texto_pagos), normal)]
 
-    # ---------- Pie de página (en cada hoja) ----------
+    # ---------- Pie de página (en cada hoja, dibujado directo en el lienzo) ----------
     def dibujar_pie(lienzo, documento):
         lienzo.saveState()
         lienzo.setFont("Helvetica", 8)

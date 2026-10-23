@@ -1,13 +1,12 @@
 // =============================================================
 // mapa-sucursales.tsx — MAPA CON UNA O VARIAS SUCURSALES
 // Lo usan mi_sucursal.tsx (una sucursal, se puede mover) y
-// sucursales.tsx (publicaciones estilo Instagram, mapa fijo).
+// sucursales.tsx (una tarjeta por sucursal, mapa fijo).
 //
-// CAMBIO: antes usaba react-native-maps (Google Maps). En el APK de Android
+// Antes usaba react-native-maps (Google Maps). En el APK de Android
 // Google Maps exige una clave de API y, sin ella, la app se cerraba al abrir
 // el mapa. Ahora el mapa es OpenStreetMap (Leaflet) dentro de un WebView:
 // no necesita clave, es gratis y funciona igual en Expo Go y en el APK.
-//   npx expo install react-native-webview
 // =============================================================
 
 import { Linking, StyleSheet, Text, View } from 'react-native';
@@ -35,15 +34,6 @@ const ORIGEN = 'https://fitmanager.sysmonitor-grupo3.online/';
 
 const conUbicacion = (s: PuntoSucursal) =>
   s.latitud !== null && s.longitud !== null && Number.isFinite(s.latitud) && Number.isFinite(s.longitud);
-
-// Abre Google Maps (o el navegador) con la ruta hacia la sucursal.
-// Abrir un enlace no necesita clave de Google.
-export function abrirComoLlegar(s: PuntoSucursal & { departamento?: string | null }) {
-  const destino = conUbicacion(s)
-    ? `${s.latitud},${s.longitud}`
-    : encodeURIComponent([s.nombre, s.municipio, s.departamento, 'Guatemala'].filter(Boolean).join(', '));
-  Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${destino}`);
-}
 
 // Página HTML con Leaflet. Los datos van como JSON; "<" se escapa para que
 // un nombre con "</script>" no pueda romper la página.

@@ -1,30 +1,28 @@
 // rutas/cliente.js — DATOS DEL CLIENTE QUE INICIÓ SESIÓN
-//   GET /cliente/membresia                    -> membresía vigente y beneficios
-//   GET /cliente/pagos                        -> sus facturas y pagos (aunque la membresía esté vencida)
-//   GET /cliente/sucursales                   -> todas las sucursales con su ubicación (mapas)
-//   GET /cliente/asistencias                  -> historial de entradas
-//   GET /cliente/rutinas                      -> lista de sus rutinas
-//   GET /cliente/rutinas/:id                  -> detalle: días, ejercicios y series
+//   GET    /cliente/membresia                 -> membresía vigente y beneficios
+//   GET    /cliente/pagos                     -> sus facturas y pagos (aunque la membresía esté vencida)
+//   GET    /cliente/sucursales                -> todas las sucursales con su ubicación (mapas)
+//   GET    /cliente/chat                      -> mensajes con su sucursal (?despues=<id>)
+//   POST   /cliente/chat                      -> enviar mensaje a su sucursal
+//   GET    /cliente/chat/sin-leer             -> cuántas respuestas de recepción no ha leído
+//   GET    /cliente/rutinas                   -> lista de sus rutinas
+//   GET    /cliente/rutinas/:id               -> detalle: días, ejercicios y series
 //   GET    /cliente/entrenadores              -> entrenadores de su sucursal (y cuáles son suyos)
 //   POST   /cliente/entrenadores/:id          -> agregar un entrenador
 //   DELETE /cliente/entrenadores/:id          -> quitar un entrenador
-//   GET  /cliente/metas                       -> sus metas con progreso y avances
-//   POST /cliente/metas                       -> crear meta
-//   POST /cliente/metas/:id/avances           -> registrar un avance
-//   POST /cliente/metas/:id/cancelar          -> cancelar una meta
-//   GET  /cliente/chat                        -> mensajes con su sucursal (?despues=<id>)
-//   POST /cliente/chat                        -> enviar mensaje a su sucursal
-//   GET  /cliente/chat/sin-leer               -> cuántas respuestas de recepción no ha leído
-//   GET /cliente/notificaciones               -> sus avisos
-//   PUT /cliente/notificaciones/:id/leida     -> marcar un aviso como leído
+//   GET    /cliente/metas                     -> sus metas con progreso y avances
+//   POST   /cliente/metas                     -> crear meta
+//   POST   /cliente/metas/:id/avances         -> registrar un avance
+//   POST   /cliente/metas/:id/cancelar        -> cancelar una meta
 //
 // Todas necesitan token y que la persona sea cliente. El id_cliente
 // sale del TOKEN, nunca de lo que mande la app: así nadie puede ver
 // los datos de otro cliente cambiando un número.
 const express = require('express');
-const { sql, conectar, responderErrorSql } = require('../db');
+const { sql, conectar } = require('../db');
 const { verificarToken, soloClientes, soloAccesoCompleto } = require('../seguridad');
-const { completarUbicaciones } = require('../servicios/ubicaciones'); // NUEVO: mapas de sucursales
+const { responderError } = require('../errores');
+const { completarUbicaciones } = require('../servicios/ubicaciones'); // mapas de sucursales
 const router = express.Router();
 router.use(verificarToken, soloClientes); // protege TODAS las rutas de este archivo
 
@@ -42,7 +40,7 @@ router.get('/membresia', async (req, res) => {
     const pool = await conectar();
     const idCliente = req.usuario.id_cliente;
 
-    //Membresía vigente hoy
+    // Membresía vigente hoy
     const actual = await pool.request()
       .input('id_cliente', sql.Int, idCliente)
       .query(`
@@ -55,7 +53,7 @@ router.get('/membresia', async (req, res) => {
           AND CAST(GETDATE() AS DATE) BETWEEN m.fecha_inicio AND m.fecha_fin
         ORDER BY m.fecha_fin DESC`);
 
-        if (actual.recordset.length === 0) {
+    if (actual.recordset.length === 0) {
       // Sin membresía vigente: la última que tuvo, para mostrar "venció el ..."
       const ultima = await pool.request()
         .input('id_cliente', sql.Int, idCliente)
@@ -83,7 +81,7 @@ router.get('/membresia', async (req, res) => {
         WHERE id_cliente = @id_cliente AND estado <> 'Suspendida'
           AND fecha_fin >= CAST(GETDATE() AS DATE)`);
 
-    // NUEVO: meses pagados que quedan (desde hoy), agrupados por plan.
+    // Meses pagados que quedan (desde hoy), agrupados por plan.
     // La app los usa para calcular cuánto cuesta cambiar de plan:
     // (precio del plan nuevo - precio del plan de esos meses) x meses.
     // Es la misma cuenta que hace usp_CambiarPlanApp al cobrar.
@@ -97,7 +95,7 @@ router.get('/membresia', async (req, res) => {
           AND m.fecha_fin >= CAST(GETDATE() AS DATE)
         GROUP BY m.id_tipo_membresia, t.nombre_tipo`);
 
-    //  Beneficios de su tipo de membresía
+    // Beneficios de su tipo de membresía
     const beneficios = await pool.request()
       .input('id_tipo', sql.Int, membresia.id_tipo_membresia)
       .query(`
@@ -109,16 +107,16 @@ router.get('/membresia', async (req, res) => {
 
     res.json({
       activa: true,
-      id_tipo_membresia: membresia.id_tipo_membresia, // NUEVO: para comparar por id, no por nombre
+      id_tipo_membresia: membresia.id_tipo_membresia, // para comparar por id, no por nombre
       tipo: membresia.nombre_tipo,
       fecha_inicio: membresia.fecha_inicio,
       fecha_fin: membresia.fecha_fin,
       pagado_hasta: hasta.recordset[0].pagado_hasta,
-      restantes: restantes.recordset, // NUEVO: [{ id_tipo_membresia, nombre_tipo, meses }]
+      restantes: restantes.recordset, // [{ id_tipo_membresia, nombre_tipo, meses }]
       beneficios: beneficios.recordset,
     });
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo consultar tu membresía');
+    responderError(res, error, 'No se pudo consultar tu membresía');
   }
 });
 
@@ -146,7 +144,7 @@ router.get('/pagos', async (req, res) => {
     }
     res.json([...porFactura.values()]);
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudieron consultar tus pagos');
+    responderError(res, error, 'No se pudieron consultar tus pagos');
   }
 });
 
@@ -167,7 +165,7 @@ router.get('/sucursales', async (req, res) => {
     }));
     res.json(await completarUbicaciones(sucursales));
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudieron consultar las sucursales');
+    responderError(res, error, 'No se pudieron consultar las sucursales');
   }
 });
 
@@ -203,7 +201,7 @@ router.get('/chat', async (req, res) => {
     const [sucursal = [], mensajes = []] = resultado.recordsets;
     res.json({ sucursal: sucursal[0]?.sucursal ?? '', mensajes: mensajes.map(mensajeChat) });
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo cargar el chat');
+    responderError(res, error, 'No se pudo cargar el chat');
   }
 });
 
@@ -220,7 +218,7 @@ router.post('/chat', async (req, res) => {
       .execute('usp_App_ChatEnviar');
     res.status(201).json(mensajeChat(resultado.recordset[0]));
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo enviar el mensaje');
+    responderError(res, error, 'No se pudo enviar el mensaje');
   }
 });
 
@@ -233,35 +231,12 @@ router.get('/chat/sin-leer', async (req, res) => {
       .execute('usp_App_ChatSinLeer');
     res.json({ sin_leer: Number(resultado.recordset[0]?.sin_leer || 0) });
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo consultar el chat');
+    responderError(res, error, 'No se pudo consultar el chat');
   }
 });
 
 // Desde aquí, las rutas exigen membresía al día (acceso completo)
 router.use(soloAccesoCompleto);
-
-// GET /cliente/asistencias?limite=30
-// Sus últimas entradas al gimnasio (por defecto 30, máximo 100).
-router.get('/asistencias', async (req, res) => {
-  const limite = Math.min(numeroValido(req.query.limite) || 30, 100);
-  try {
-    const pool = await conectar();
-    const resultado = await pool.request()
-      .input('id_cliente', sql.Int, req.usuario.id_cliente)
-      .input('limite', sql.Int, limite)
-      .query(`
-        SELECT TOP (@limite) a.fecha_hora_ingreso, s.nombre_sucursal,
-               a.membresia_validada AS acceso_permitido
-        FROM Asistencia a
-        JOIN Sucursal s ON s.id_sucursal = a.id_sucursal
-        WHERE a.id_cliente = @id_cliente
-        ORDER BY a.fecha_hora_ingreso DESC`);
-    res.json(resultado.recordset);
-  } catch (error) {
-    responderErrorSql(res, error, 'No se pudo consultar tus asistencias');
-  }
-});
-
 
 // GET /cliente/rutinas
 // Lista de sus rutinas con el nombre del entrenador que la creó.
@@ -280,7 +255,7 @@ router.get('/rutinas', async (req, res) => {
         ORDER BY r.fecha_creacion DESC`);
     res.json(resultado.recordset);
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo consultar tus rutinas');
+    responderError(res, error, 'No se pudo consultar tus rutinas');
   }
 });
 
@@ -308,7 +283,7 @@ router.get('/rutinas/:id', async (req, res) => {
       return res.status(404).json({ error: 'No se encontró esa rutina' });
     }
 
-    //  Todos sus días, ejercicios y series
+    // 2. Todos sus días, ejercicios y series
     const filas = await pool.request()
       .input('id_rutina', sql.Int, idRutina)
       .query(`
@@ -324,7 +299,7 @@ router.get('/rutinas/:id', async (req, res) => {
         WHERE d.id_rutina = @id_rutina
         ORDER BY d.numero_dia, b.orden, se.numero_serie`);
 
-    // Agrupar: cada día con sus ejercicios, cada ejercicio con sus series
+    // 3. Agrupar: cada día con sus ejercicios, cada ejercicio con sus series
     const dias = [];
     for (const fila of filas.recordset) {
       let dia = dias.find((d) => d.id_dia_rutina === fila.id_dia_rutina);
@@ -358,7 +333,7 @@ router.get('/rutinas/:id', async (req, res) => {
 
     res.json({ ...rutina.recordset[0], dias });
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo consultar la rutina');
+    responderError(res, error, 'No se pudo consultar la rutina');
   }
 });
 
@@ -378,7 +353,7 @@ router.get('/entrenadores', async (req, res) => {
       .execute('usp_App_ListarEntrenadores');
     res.json(resultado.recordset);
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudieron consultar los entrenadores');
+    responderError(res, error, 'No se pudieron consultar los entrenadores');
   }
 });
 
@@ -397,7 +372,7 @@ router.post('/entrenadores/:id', async (req, res) => {
       .execute('usp_App_AgregarEntrenador');
     res.status(201).json({ mensaje: 'Entrenador agregado' });
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo agregar el entrenador');
+    responderError(res, error, 'No se pudo agregar el entrenador');
   }
 });
 
@@ -415,7 +390,7 @@ router.delete('/entrenadores/:id', async (req, res) => {
       .execute('usp_App_QuitarEntrenador');
     res.json({ mensaje: 'Entrenador quitado' });
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo quitar el entrenador');
+    responderError(res, error, 'No se pudo quitar el entrenador');
   }
 });
 
@@ -452,7 +427,7 @@ router.get('/metas', async (req, res) => {
     }
     res.json([...porMeta.values()]);
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo consultar tus metas');
+    responderError(res, error, 'No se pudo consultar tus metas');
   }
 });
 
@@ -477,7 +452,7 @@ router.post('/metas', async (req, res) => {
       .execute('usp_App_CrearMeta');
     res.status(201).json({ mensaje: 'Meta creada', id_meta: resultado.recordset[0]?.id_meta });
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo crear la meta');
+    responderError(res, error, 'No se pudo crear la meta');
   }
 });
 
@@ -500,7 +475,7 @@ router.post('/metas/:id/avances', async (req, res) => {
       progreso: Number(fila.progreso || 0),
     });
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo registrar el avance');
+    responderError(res, error, 'No se pudo registrar el avance');
   }
 });
 
@@ -516,54 +491,7 @@ router.post('/metas/:id/cancelar', async (req, res) => {
       .execute('usp_App_CancelarMeta');
     res.json({ mensaje: 'Meta cancelada' });
   } catch (error) {
-    responderErrorSql(res, error, 'No se pudo cancelar la meta');
-  }
-});
-
-
-// GET /cliente/notificaciones
-// Sus últimos 50 avisos, los más recientes primero.
-
-router.get('/notificaciones', async (req, res) => {
-  try {
-    const pool = await conectar();
-    const resultado = await pool.request()
-      .input('id_cliente', sql.Int, req.usuario.id_cliente)
-      .query(`
-        SELECT TOP 50 id_notificacion, tipo_notificacion, mensaje, fecha_generada, leida
-        FROM Notificacion
-        WHERE id_cliente = @id_cliente
-        ORDER BY fecha_generada DESC`);
-    res.json(resultado.recordset);
-  } catch (error) {
-    responderErrorSql(res, error, 'No se pudo consultar tus notificaciones');
-  }
-});
-
-// PUT /cliente/notificaciones/:id/leida
-// Marca un aviso como leído (solo si es de este cliente).
-
-router.put('/notificaciones/:id/leida', async (req, res) => {
-  const idNotificacion = numeroValido(req.params.id);
-  if (!idNotificacion) {
-    return res.status(400).json({ error: 'El número de notificación no es válido' });
-  }
-
-  try {
-    const pool = await conectar();
-    const resultado = await pool.request()
-      .input('id_notificacion', sql.Int, idNotificacion)
-      .input('id_cliente', sql.Int, req.usuario.id_cliente)
-      .query(`
-        UPDATE Notificacion SET leida = 1
-        WHERE id_notificacion = @id_notificacion AND id_cliente = @id_cliente`);
-
-    if (resultado.rowsAffected[0] === 0) {
-      return res.status(404).json({ error: 'No se encontró esa notificación' });
-    }
-    res.json({ mensaje: 'Notificación marcada como leída' });
-  } catch (error) {
-    responderErrorSql(res, error, 'No se pudo actualizar la notificación');
+    responderError(res, error, 'No se pudo cancelar la meta');
   }
 });
 

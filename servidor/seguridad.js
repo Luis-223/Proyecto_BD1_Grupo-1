@@ -28,6 +28,7 @@ function leerToken(token) {
     throw new ErrorApp('SESION', 'La sesión expiró o no es válida. Inicia sesión otra vez.');
   }
 }
+
 // VERIFICAR TOKEN (se pone antes de las rutas JSON protegidas)
 // La app debe mandar el encabezado:  Authorization: Bearer <token>
 // Si el token es válido, sus datos quedan en req.usuario.
@@ -51,6 +52,7 @@ function soloClientes(req, res, next) {
   }
   next();
 }
+
 // SOLO ACCESO COMPLETO
 // Quien tiene la membresía vencida (estado Inactivo) puede iniciar
 // sesión, pero solo ve su membresía y la sección de pago. El resto
@@ -58,12 +60,8 @@ function soloClientes(req, res, next) {
 // pasar. Se usa DESPUÉS de verificarToken.
 const MENSAJE_LIMITADO = 'Tu membresía venció. Renuévala para usar esta sección.';
 
-function tieneAccesoCompleto(usuario) {
-  return !usuario || usuario.acceso !== 'limitado';
-}
-
 function soloAccesoCompleto(req, res, next) {
-  if (!tieneAccesoCompleto(req.usuario)) {
+  if (req.usuario && req.usuario.acceso === 'limitado') {
     return res.status(403).json({ error: MENSAJE_LIMITADO, membresia_vencida: true });
   }
   next();
@@ -110,7 +108,5 @@ module.exports = {
   verificarToken,
   soloClientes,
   soloAccesoCompleto,
-  tieneAccesoCompleto,
-  MENSAJE_LIMITADO,
   crearLimitador,
 };

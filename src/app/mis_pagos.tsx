@@ -5,11 +5,10 @@
 // =============================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'expo-router';
 import {
-  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,Image
+  ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { listarPagos } from './conexion';
 import type { PagoCliente } from './conexion';
 
@@ -27,7 +26,6 @@ const quetzales = (n: number) => `Q${Number(n || 0).toLocaleString('es-GT', { mi
 const anulada = (p: PagoCliente) => p.estado?.toLowerCase() === 'anulada';
 
 export default function MisPagos() {
-  const router = useRouter();
   const [pagos, setPagos] = useState<PagoCliente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
@@ -184,9 +182,6 @@ const styles = StyleSheet.create({
   centro: { flex: 1, backgroundColor: '#020700', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
   logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
-  botonRegresar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  textoRegresar: { color: '#00E676', fontSize: 14, fontWeight: 'bold' },
-  titulo: { fontSize: 22, fontWeight: 'bold', color: '#ffffff', marginBottom: 14 },
 
   resumen: { backgroundColor: '#162216', borderRadius: 14, padding: 18, borderWidth: 1, borderColor: '#223822', marginBottom: 12 },
   resumenEtiqueta: { color: '#9a9a9a', fontSize: 13 },
