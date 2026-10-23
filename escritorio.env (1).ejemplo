@@ -1,0 +1,23 @@
+# escritorio.env — CONFIGURACIÓN DE LA APP DE ESCRITORIO (PRINCIPAL.py)
+# Copia este archivo como "escritorio.env" en la misma carpeta que PRINCIPAL.py,
+# llénalo y NUNCA lo subas a GitHub (agrega "escritorio.env" al .gitignore).
+#
+# La app ya NO se conecta a la base de datos: habla con el servidor de FitManager
+# (la VM de Azure) por HTTPS, igual que la app móvil. No hace falta ninguna
+# contraseña de base de datos ni agregar la IP al firewall de Azure SQL.
+
+# ---- Dirección del servidor (la misma que usa la app móvil) ----
+# Con HTTPS y el dominio del certificado, sin "/" al final:
+SERVIDOR_URL=https://api.tudominio.com
+# Pruebas en tu PC con el servidor local (solo así se acepta http://):
+# SERVIDOR_URL=http://localhost:3000
+
+# ---- Sucursal donde está instalada esta computadora ----
+# El id_sucursal de la tabla Sucursal (el de la cuenta recepcion.<sucursal>).
+# Las facturas y ventas quedan en esta sucursal. Una cuenta de sucursal
+# solo puede iniciar sesión en SU sucursal.
+ID_SUCURSAL=1
+
+# ---- Opcionales (normalmente no se tocan) ----
+# PERMITIR_HTTP=true     # solo para pruebas con http:// fuera de tu red local
+# VERIFICAR_SSL=false    # solo si el certificado es autofirmado (no recomendado)

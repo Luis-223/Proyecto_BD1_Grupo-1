@@ -1,31 +1,31 @@
-# conexion_bd.py — CONEXIÓN DE LA APP DE ESCRITORIO (PRINCIPAL.py) CON SQL SERVER
+# conexion_bd.py — CONEXIÓN DE LA APP DE ESCRITORIO (PRINCIPAL.py) CON EL SERVIDOR DE FITMANAGER
 #
-# Aquí vive TODO lo que habla con la base de datos. PRINCIPAL.py solo
-# dibuja ventanas y llama a las funciones de abajo.
+# Aquí vive TODO lo que habla con el servidor. PRINCIPAL.py solo dibuja
+# ventanas y llama a las funciones de abajo (resumen, facturar_membresia, chat_enviar...).
+#
+#   PRINCIPAL.py  ->  conexion_bd.py  --HTTPS-->  servidor Node (VM de Azure)  -->  Azure SQL
 #
 # Cómo funciona:
-#   - Los datos de conexión salen de "escritorio.env" (junto a este
-#     archivo, NUNCA se sube a GitHub). Son los mismos nombres que usa
-#     el .env del servidor Node: DB_SERVER, DB_NAME, DB_USER...
-#   - La app NO escribe directo en las tablas: solo ejecuta
-#     procedimientos almacenados (servidor/sql/06_app_escritorio.sql).
-#     Así su usuario de base solo necesita permiso EXECUTE.
-#   - Las contraseñas están guardadas con Argon2id (las guarda el
-#     servidor Node). Aquí se comparan con la misma configuración, así
-#     que un empleado usa la misma contraseña en la app y en el escritorio.
-#   - Los errores que lanzan los procedimientos con THROW 50000+ traen
-#     un mensaje claro ("La clase ya no tiene cupo."): se muestran tal cual.
+#   - La app YA NO se conecta a la base de datos: no necesita pyodbc, ni el driver
+#     ODBC, ni la contraseña de la base, ni agregar su IP al firewall de Azure SQL.
+#     Solo necesita internet y la dirección del servidor.
+#   - Los datos salen de "escritorio.env" (junto a este archivo, NUNCA se sube a GitHub):
+#     SERVIDOR_URL e ID_SUCURSAL.
+#   - Al iniciar sesión el servidor revisa usuario y contraseña (Argon2, igual que la
+#     app móvil) y devuelve un token. Después cada petición lo manda en el encabezado
+#     Authorization. La sucursal y el empleado SIEMPRE los toma el servidor del token.
+#   - Las rutas están en servidor/rutas/escritorio.js.
+#   - Los errores del servidor traen un mensaje claro ("La clase ya no tiene cupo.")
+#     y se muestran tal cual.
 
-import json
 import os
 import re
 import threading
-import time
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
-import pyodbc
-from argon2 import PasswordHasher, Type
-from argon2.exceptions import InvalidHashError, VerificationError
+import requests
 from dotenv import load_dotenv
 
 CARPETA = Path(__file__).resolve().parent
@@ -39,11 +39,23 @@ class ErrorBD(Exception):
 # =============================================================================
 # CONFIGURACIÓN
 # =============================================================================
-SEGUNDOS_PARA_CONECTAR = 60   # la base gratuita de Azure "se duerme" y tarda hasta 1 minuto en despertar
-SEGUNDOS_POR_CONSULTA = 30
+SEGUNDOS_PARA_CONECTAR = 15    # llegar al servidor
+SEGUNDOS_DE_RESPUESTA = 75     # la base gratuita de Azure "se duerme" y tarda hasta 1 minuto en despertar
+LARGO_MAXIMO_MENSAJE = 1000
+LARGO_MAXIMO_CONTRASENA = 100
 
-# Estados de ODBC que significan "se cayó o no hay conexión"
-ESTADOS_SIN_CONEXION = {"08S01", "08001", "08003", "08004", "08007", "HYT00", "HYT01"}
+# Claves cuyo valor es texto libre: nunca se convierten en fecha aunque se parezcan a una
+_CLAVES_DE_TEXTO = {"texto", "ultimo_texto", "motivo", "nombre", "cliente", "autor"}
+_FECHA = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
+
+
+def _servidor():
+    return os.getenv("SERVIDOR_URL", "").strip().rstrip("/")
+
+
+def _es_local(direccion):
+    host = (urlparse(direccion).hostname or "").lower()
+    return host in ("localhost", "127.0.0.1", "::1") or host.startswith(("192.168.", "10."))
 
 
 def revisar_configuracion():
@@ -51,10 +63,21 @@ def revisar_configuracion():
     problemas = []
     if not (CARPETA / "escritorio.env").exists():
         problemas.append("No existe el archivo escritorio.env (copia escritorio.env.ejemplo y llénalo).")
-    for nombre in ("DB_SERVER", "DB_NAME", "DB_USER", "DB_PASSWORD", "ID_SUCURSAL"):
-        if not os.getenv(nombre):
-            problemas.append(f"Falta {nombre} en escritorio.env.")
-    if os.getenv("ID_SUCURSAL") and not os.getenv("ID_SUCURSAL").strip().isdigit():
+
+    servidor = _servidor()
+    if not servidor:
+        problemas.append("Falta SERVIDOR_URL en escritorio.env (la dirección del servidor, "
+                         "ej: https://api.tudominio.com).")
+    elif not re.match(r"https?://[^/\s]+", servidor):
+        problemas.append("SERVIDOR_URL debe empezar con https:// (ej: https://api.tudominio.com).")
+    elif servidor.lower().startswith("http://") and not _es_local(servidor) \
+            and os.getenv("PERMITIR_HTTP", "").strip().lower() != "true":
+        problemas.append("SERVIDOR_URL usa http:// y la contraseña viajaría sin cifrar. Usa https:// "
+                         "(o PERMITIR_HTTP=true solo para pruebas).")
+
+    if not os.getenv("ID_SUCURSAL"):
+        problemas.append("Falta ID_SUCURSAL en escritorio.env.")
+    elif not os.getenv("ID_SUCURSAL").strip().isdigit():
         problemas.append("ID_SUCURSAL debe ser un número (el id_sucursal de esta sucursal).")
     return problemas
 
@@ -64,267 +87,131 @@ def id_sucursal_configurada():
 
 
 # =============================================================================
-# CONEXIÓN
+# PETICIONES AL SERVIDOR
 # =============================================================================
-_conexion = None
-_candado = threading.RLock()   # una sola consulta a la vez (la ventana usa hilos)
+_sesion = requests.Session()
+_candado = threading.Lock()      # protege el token (la ventana usa varios hilos)
+_token = None
 
 
-def _valor(texto):
-    """Escapa un valor para la cadena ODBC: {valor} con las } dobles."""
-    return "{" + str(texto).replace("}", "}}") + "}"
+def _verificar_certificado():
+    return os.getenv("VERIFICAR_SSL", "true").strip().lower() != "false"
 
 
-def _cadena_conexion():
-    servidor = os.getenv("DB_SERVER", "").strip()
-    puerto = os.getenv("DB_PORT", "1433").strip() or "1433"
-    # Con instancia con nombre (localhost\SQLEXPRESS) no se pone puerto
-    direccion = servidor if "\\" in servidor else f"tcp:{servidor},{puerto}"
-
-    # Igual que servidor/db.js:
-    #   en Azure  -> DB_ENCRYPT=true  (conexión cifrada, certificado verificado)
-    #   en tu PC  -> DB_ENCRYPT vacío (sin cifrar, se confía en el certificado local)
-    cifrar = os.getenv("DB_ENCRYPT", "").strip().lower() == "true"
-
-    partes = {
-        "DRIVER": _valor(os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server")),
-        "SERVER": direccion,
-        "DATABASE": _valor(os.getenv("DB_NAME", "FitManager")),
-        "UID": _valor(os.getenv("DB_USER", "")),
-        "PWD": _valor(os.getenv("DB_PASSWORD", "")),
-        "Encrypt": "yes" if cifrar else "no",
-        "TrustServerCertificate": "no" if cifrar else "yes",
-        "APP": "FitManager Escritorio",
-    }
-    return ";".join(f"{clave}={valor}" for clave, valor in partes.items())
+def _convertir_fechas(valor, clave=None):
+    """Las fechas llegan como 'AAAA-MM-DDTHH:MM:SS' (misma hora que la base): se vuelven datetime."""
+    if isinstance(valor, str):
+        if clave not in _CLAVES_DE_TEXTO and _FECHA.fullmatch(valor):
+            return datetime.fromisoformat(valor)
+        return valor
+    if isinstance(valor, list):
+        return [_convertir_fechas(v) for v in valor]
+    if isinstance(valor, dict):
+        return {k: _convertir_fechas(v, k) for k, v in valor.items()}
+    return valor
 
 
-def _conectar():
-    """La primera vez abre la conexión; las siguientes devuelve la misma."""
-    global _conexion
-    if _conexion is None:
-        problemas = revisar_configuracion()
-        if problemas:
-            raise ErrorBD("\n".join(problemas))
-        # autocommit=True: cada procedimiento maneja su propia transacción
-        _conexion = pyodbc.connect(_cadena_conexion(), autocommit=True, timeout=SEGUNDOS_PARA_CONECTAR)
-        _conexion.timeout = SEGUNDOS_POR_CONSULTA
-    return _conexion
+def _error_de_respuesta(respuesta):
+    """Mensaje para el usuario a partir de una respuesta 4xx/5xx del servidor."""
+    try:
+        mensaje = respuesta.json().get("error")
+    except ValueError:
+        mensaje = None
+
+    if respuesta.status_code == 401 and _token:
+        return ErrorBD(mensaje or "La sesión expiró. Cierra la app e inicia sesión otra vez.")
+    if respuesta.status_code in (502, 503, 504):
+        return ErrorBD("El servidor no está disponible en este momento (o la base se está iniciando). "
+                       "Espera un minuto e intenta de nuevo.")
+    if respuesta.status_code == 404 and not mensaje:
+        return ErrorBD("El servidor no tiene esa ruta. Falta actualizar el servidor con rutas/escritorio.js "
+                       "(y reiniciarlo).")
+    if respuesta.status_code == 404 and mensaje and mensaje.startswith("No existe la ruta"):
+        return ErrorBD("El servidor todavía no tiene las rutas de escritorio. Agrega rutas/escritorio.js y "
+                       "la línea app.use('/escritorio', ...) en server.js, y reinícialo.")
+    return ErrorBD(mensaje or f"El servidor respondió con un error ({respuesta.status_code}).")
 
 
-def _olvidar_conexion():
-    """Cierra la conexión rota para abrir una nueva en la próxima consulta."""
-    global _conexion
-    if _conexion is not None:
+def _pedir(metodo, ruta, cuerpo=None, parametros=None, reintentar=False, con_token=True):
+    """Hace una petición y devuelve el JSON de la respuesta, o lanza ErrorBD.
+
+    reintentar=True: si no se pudo llegar al servidor se intenta UNA vez más. Solo se usa en
+    consultas (GET); en cobros, ventas y mensajes es False para no hacerlos dos veces.
+    """
+    problemas = revisar_configuracion()
+    if problemas:
+        raise ErrorBD("\n".join(problemas))
+
+    encabezados = {}
+    with _candado:
+        token = _token
+    if con_token:
+        if not token:
+            raise ErrorBD("Debes iniciar sesión.")
+        encabezados["Authorization"] = f"Bearer {token}"
+
+    for intento in (1, 2):
         try:
-            _conexion.close()
-        except pyodbc.Error:
-            pass
-    _conexion = None
+            respuesta = _sesion.request(
+                metodo, _servidor() + ruta, json=cuerpo, params=parametros, headers=encabezados,
+                timeout=(SEGUNDOS_PARA_CONECTAR, SEGUNDOS_DE_RESPUESTA), verify=_verificar_certificado())
+        except requests.exceptions.SSLError as error:
+            print("[Servidor] Error SSL:", error)
+            raise ErrorBD("No se pudo verificar el certificado HTTPS del servidor. Revisa que SERVIDOR_URL "
+                          "use el dominio del certificado (no la IP).") from None
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as error:
+            if reintentar and intento == 1:
+                continue
+            print("[Servidor] Sin conexión:", error)
+            raise ErrorBD("No se pudo conectar con el servidor. Revisa el internet y SERVIDOR_URL en "
+                          "escritorio.env, e intenta de nuevo.") from None
+        except requests.exceptions.RequestException as error:
+            print("[Servidor] Error:", error)
+            raise ErrorBD("Ocurrió un error al comunicarse con el servidor. El detalle está en la terminal.") from None
+
+        if respuesta.status_code >= 400:
+            raise _error_de_respuesta(respuesta)
+        try:
+            return respuesta.json()
+        except ValueError:
+            raise ErrorBD("El servidor respondió algo que no se entiende. Revisa que SERVIDOR_URL apunte "
+                          "al servidor de FitManager.") from None
 
 
-def cerrar():
-    with _candado:
-        _olvidar_conexion()
-
-
-# =============================================================================
-# ERRORES
-# =============================================================================
-def _estado_odbc(error):
-    return error.args[0] if error.args and isinstance(error.args[0], str) else ""
-
-
-def _traducir_error(error):
-    """Convierte un error de pyodbc en un ErrorBD con un mensaje entendible.
-
-    Los mensajes de SQL Server llegan así:
-      [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]La clase ya no tiene cupo. (50025) (SQLExecDirectW)
-    """
-    estado = _estado_odbc(error)
-    texto = str(error.args[1]) if len(error.args) > 1 else str(error)
-
-    encontrado = re.search(r"\[SQL Server\](.*)\((\d+)\)\s*\(SQL\w*\)", texto, re.S)
-    mensaje = encontrado.group(1).strip() if encontrado else ""
-    numero = int(encontrado.group(2)) if encontrado else 0
-
-    if numero >= 50000:                                   # THROW de los procedimientos del equipo
-        return ErrorBD(mensaje)
-    if numero == 2812:                                    # Could not find stored procedure
-        return ErrorBD("Falta un procedimiento en la base. Ejecuta servidor/sql/06_app_escritorio.sql.\n\n" + mensaje)
-    if numero == 229:                                     # The EXECUTE permission was denied
-        return ErrorBD("El usuario de la base no tiene permiso. Revisa que sea miembro de rol_app_sucursal "
-                       "(servidor/sql/06_app_escritorio.sql).\n\n" + mensaje)
-    if numero == 40615:                                   # Firewall de Azure
-        return ErrorBD("Azure SQL no deja entrar a esta computadora: agrega su IP pública en las reglas "
-                       "de firewall del servidor (portal de Azure → Redes).")
-    if estado == "IM002":
-        return ErrorBD("No está instalado el driver \"ODBC Driver 18 for SQL Server\". Instálalo desde el sitio "
-                       "de Microsoft o cambia DB_DRIVER en escritorio.env.")
-    if estado == "28000" or numero == 18456:
-        return ErrorBD("La base rechazó el usuario o la contraseña de escritorio.env (DB_USER / DB_PASSWORD).")
-    if estado in ESTADOS_SIN_CONEXION:
-        return ErrorBD("No se pudo conectar con la base de datos. Revisa el internet y DB_SERVER en "
-                       "escritorio.env, e intenta de nuevo.")
-
-    print("[BD] Error no esperado:", texto)               # el detalle queda en la terminal
-    return ErrorBD("Ocurrió un error en la base de datos. El detalle está en la terminal.")
-
-
-# =============================================================================
-# EJECUTAR UN PROCEDIMIENTO
-# =============================================================================
-def _leer_resultados(cursor):
-    """Lee TODAS las tablas que devuelve el procedimiento (como recordsets en Node)."""
-    tablas = []
-    while True:
-        if cursor.description:                            # este resultado trae filas
-            columnas = [c[0] for c in cursor.description]
-            tablas.append([dict(zip(columnas, fila)) for fila in cursor.fetchall()])
-        if not cursor.nextset():
-            break
-    return tablas
-
-
-def ejecutar(procedimiento, reintentar=True, **parametros):
-    """Ejecuta dbo.<procedimiento> con parámetros por nombre y devuelve una lista de tablas.
-
-    ejecutar("usp_Escritorio_Resumen", id_sucursal=1)
-      -> [[{"clientes_activos": 12, "facturas_hoy": 3, ...}]]
-
-    reintentar=True: si la conexión se había caído (Azure la cierra si
-    nadie la usa) se reconecta y se intenta UNA vez más. Solo se usa en
-    consultas; en cobros es False para no facturar dos veces.
-    """
-    if not re.fullmatch(r"usp_\w+", procedimiento) or not all(re.fullmatch(r"\w+", n) for n in parametros):
-        raise ValueError("Nombre de procedimiento o parámetro no válido")
-
-    sql = "SET NOCOUNT ON; EXEC dbo." + procedimiento
-    if parametros:
-        sql += " " + ", ".join(f"@{nombre} = ?" for nombre in parametros)
-    valores = list(parametros.values())
-
-    with _candado:
-        for intento in (1, 2):
-            try:
-                cursor = _conectar().cursor()
-                try:
-                    cursor.execute(sql, valores)
-                    return _leer_resultados(cursor)
-                finally:
-                    cursor.close()
-            except pyodbc.Error as error:
-                if _estado_odbc(error) in ESTADOS_SIN_CONEXION:
-                    _olvidar_conexion()
-                    if reintentar and intento == 1:
-                        continue
-                raise _traducir_error(error) from None
+def _tablas(metodo, ruta, cuerpo=None, parametros=None, reintentar=False):
+    """Pide algo a /escritorio y devuelve la lista de tablas (como los recordsets del procedimiento)."""
+    datos = _pedir(metodo, "/escritorio" + ruta, cuerpo, parametros, reintentar)
+    return _convertir_fechas(datos.get("tablas", []))
 
 
 def _ultima_tabla(tablas):
-    """Como recordsets.at(-1) en Node: el resultado final del procedimiento."""
+    """El resultado final del procedimiento."""
     return tablas[-1] if tablas else []
 
 
 def _primera_fila(tablas):
     filas = _ultima_tabla(tablas)
     if not filas:
-        raise ErrorBD("La base de datos no devolvió datos.")
+        raise ErrorBD("El servidor no devolvió datos.")
     return filas[0]
 
 
+def cerrar():
+    global _token
+    with _candado:
+        _token = None
+    _sesion.close()
+
+
 # =============================================================================
-# INICIO DE SESIÓN (misma lógica que servidor/servicios/cuentas.js)
+# INICIO DE SESIÓN
 # =============================================================================
-# Argon2id con los mismos valores que el servidor Node (OWASP):
-# 19 MiB de memoria, 2 pasadas, 1 hilo, hash de 32 bytes y sal de 16.
-_argon2 = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1,
-                         hash_len=32, salt_len=16, type=Type.ID)
-
-LARGO_MAXIMO_CONTRASENA = 100
-ESTADOS_BLOQUEADOS = {"suspendido", "bloqueado"}
-# Quien SOLO tiene estos roles no puede usar la app de sucursal
-# (un cliente no debe poder facturar). Ajusta si cambian los roles.
-ROLES_SIN_ACCESO = {"cliente"}
-
-MAXIMO_INTENTOS = 5
-MINUTOS_BLOQUEO = 15
-_intentos = {}           # alias -> [fallos, bloqueado_hasta]
-_hash_falso = None
-
-
-def _minutos_bloqueado(alias):
-    fallos, hasta = _intentos.get(alias, [0, 0])
-    restante = hasta - time.time()
-    if hasta and restante <= 0:
-        _intentos.pop(alias, None)
-        return 0
-    return int(restante // 60) + 1 if hasta else 0
-
-
-def _registrar_fallo(alias):
-    registro = _intentos.setdefault(alias, [0, 0])
-    registro[0] += 1
-    if registro[0] >= MAXIMO_INTENTOS:
-        registro[1] = time.time() + MINUTOS_BLOQUEO * 60
-
-
-def _coincide(hash_guardado, contrasena):
-    """Compara sin lanzar error si el hash guardado está dañado."""
-    try:
-        return _argon2.verify(hash_guardado, contrasena)
-    except (VerificationError, InvalidHashError):
-        return False
-
-
-def _gastar_tiempo_igual(contrasena):
-    """Si el alias no existe se hace igual un cálculo Argon2: así la respuesta
-    tarda lo mismo y nadie averigua qué alias existen midiendo el tiempo."""
-    global _hash_falso
-    if _hash_falso is None:
-        _hash_falso = _argon2.hash("alias-que-no-existe")
-    _coincide(_hash_falso, contrasena or "x")
-
-
-def _registrar_intento(id_alias, exitoso):
-    ejecutar("usp_RegistrarIntentoLogin", reintentar=False,
-             id_alias=id_alias, resultado="Exitoso" if exitoso else "Fallido")
-
-
-def _comprobar_contrasena(alias, contrasena):
-    """Devuelve el id_alias si la contraseña es correcta, o None."""
-    filas = _ultima_tabla(ejecutar("usp_ObtenerCredencial", alias=alias))
-    if not filas:                                         # el alias no existe
-        _gastar_tiempo_igual(contrasena)
-        return None
-    credencial = filas[0]
-
-    if credencial["contrasena_argon2"]:                   # ya está en Argon2
-        correcta = _coincide(credencial["contrasena_argon2"], contrasena)
-        _registrar_intento(credencial["id_alias"], correcta)
-        return credencial["id_alias"] if correcta else None
-
-    if credencial["tiene_hash_viejo"]:                    # usuario viejo con SHA-256
-        viejo = _primera_fila(ejecutar("usp_ValidarLogin", reintentar=False,
-                                       alias=alias, contrasena_plana=contrasena))
-        if viejo.get("resultado") != "Exitoso":           # usp_ValidarLogin ya guardó el intento
-            return None
-        # Migración a Argon2 (igual que hace el servidor Node)
-        ejecutar("usp_GuardarContrasenaArgon2", reintentar=False,
-                 id_alias=credencial["id_alias"], contrasena_argon2=_argon2.hash(contrasena))
-        return credencial["id_alias"]
-
-    _gastar_tiempo_igual(contrasena)                      # no tiene contraseña guardada
-    _registrar_intento(credencial["id_alias"], False)
-    return None
-
-
 def iniciar_sesion(alias, contrasena):
-    """Revisa usuario y contraseña. Devuelve los datos del empleado o lanza ErrorBD.
+    """Revisa usuario y contraseña en el servidor. Devuelve los datos del empleado o lanza ErrorBD.
 
-    {"id_alias", "alias", "id_usuario", "nombre", "estado", "roles",
-     "id_sucursal", "sucursal"}
+    {"id_alias", "alias", "id_usuario", "nombre", "estado", "roles", "id_sucursal", "sucursal"}
     """
+    global _token
     alias = (alias or "").strip()
     contrasena = contrasena or ""
     if not alias or not contrasena:
@@ -332,27 +219,13 @@ def iniciar_sesion(alias, contrasena):
     if len(contrasena) > LARGO_MAXIMO_CONTRASENA:
         raise ErrorBD("Usuario o contraseña incorrectos.")
 
-    espera = _minutos_bloqueado(alias)
-    if espera:
-        raise ErrorBD(f"Demasiados intentos. Intenta de nuevo en {espera} minutos.")
-
-    id_alias = _comprobar_contrasena(alias, contrasena)
-    if not id_alias:
-        _registrar_fallo(alias)
-        raise ErrorBD("Usuario o contraseña incorrectos.")   # mismo mensaje si el alias no existe
-    _intentos.pop(alias, None)
-
-    empleado = _primera_fila(ejecutar("usp_Escritorio_DatosEmpleado",
-                                      id_alias=id_alias, id_sucursal=id_sucursal_configurada()))
-
-    if (empleado["estado"] or "").strip().lower() in ESTADOS_BLOQUEADOS:
-        raise ErrorBD("Tu usuario no está activo. Habla con el administrador.")
-
-    roles = {r.strip().lower() for r in (empleado["roles"] or "").split(",") if r.strip()}
-    if not roles - ROLES_SIN_ACCESO:
-        raise ErrorBD("Tu usuario no tiene permiso para usar la app de sucursal.")
-
-    return empleado
+    datos = _pedir("POST", "/escritorio/login", con_token=False, cuerpo={
+        "alias": alias, "contrasena": contrasena, "id_sucursal": id_sucursal_configurada()})
+    if not datos.get("token") or not datos.get("usuario"):
+        raise ErrorBD("El servidor no devolvió la sesión. Revisa que sea el servidor de FitManager.")
+    with _candado:
+        _token = datos["token"]
+    return datos["usuario"]
 
 
 # =============================================================================
@@ -360,58 +233,108 @@ def iniciar_sesion(alias, contrasena):
 # =============================================================================
 def actualizar_membresias_vencidas():
     """Pasa a 'Vencida' las membresías cuya fecha ya terminó (al abrir la app)."""
-    ejecutar("usp_ActualizarEstadoMembresias")
+    _tablas("POST", "/membresias/actualizar")
 
 
-def resumen(id_sucursal):
-    return _primera_fila(ejecutar("usp_Escritorio_Resumen", id_sucursal=id_sucursal))
+def resumen():
+    return _primera_fila(_tablas("GET", "/resumen", reintentar=True))
 
 
-def catalogos(id_sucursal):
-    clientes, tipos, metodos, entrenadores = ejecutar("usp_Escritorio_Catalogos", id_sucursal=id_sucursal)
+def catalogos():
+    clientes, tipos, metodos, entrenadores = _tablas("GET", "/catalogos", reintentar=True)
     return {"clientes": clientes, "tipos": tipos, "metodos": metodos, "entrenadores": entrenadores}
 
 
-def listar_facturas(id_sucursal, cantidad=100):
-    return _ultima_tabla(ejecutar("usp_Escritorio_ListarFacturas", id_sucursal=id_sucursal, cantidad=cantidad))
+def listar_facturas(cantidad=100):
+    return _ultima_tabla(_tablas("GET", "/facturas", parametros={"cantidad": cantidad}, reintentar=True))
 
 
-def facturar_membresia(id_cliente, id_tipo_membresia, id_metodo_pago, meses, id_sucursal, id_usuario):
-    return _primera_fila(ejecutar(
-        "usp_Escritorio_FacturarMembresia", reintentar=False,
-        id_cliente=id_cliente, id_tipo_membresia=id_tipo_membresia, id_metodo_pago=id_metodo_pago,
-        meses=meses, id_sucursal=id_sucursal, id_usuario=id_usuario))
+def facturar_membresia(id_cliente, id_tipo_membresia, id_metodo_pago, meses):
+    return _primera_fila(_tablas("POST", "/facturas/membresia", {
+        "id_cliente": id_cliente, "id_tipo_membresia": id_tipo_membresia,
+        "id_metodo_pago": id_metodo_pago, "meses": meses}))
 
 
-def listar_clases(id_sucursal):
-    return _ultima_tabla(ejecutar("usp_Escritorio_ListarClases", id_sucursal=id_sucursal))
+def listar_clases():
+    return _ultima_tabla(_tablas("GET", "/clases", reintentar=True))
 
 
-def cambiar_horario(id_clase, id_sucursal, nueva_fecha_hora, motivo, id_usuario):
-    return _primera_fila(ejecutar(
-        "usp_Escritorio_CambiarHorarioClase", reintentar=False,
-        id_clase=id_clase, id_sucursal=id_sucursal, nueva_fecha_hora=nueva_fecha_hora,
-        motivo=motivo or None, id_usuario=id_usuario))
+def cambiar_horario(id_clase, nueva_fecha_hora, motivo):
+    """nueva_fecha_hora: datetime con la hora que debe quedar en la base."""
+    return _primera_fila(_tablas("PUT", f"/clases/{int(id_clase)}/horario", {
+        "nueva_fecha_hora": nueva_fecha_hora.strftime("%Y-%m-%d %H:%M:%S"), "motivo": motivo or None}))
 
 
-def listar_asignaciones(id_sucursal):
-    return _ultima_tabla(ejecutar("usp_Escritorio_ListarAsignaciones", id_sucursal=id_sucursal))
+def listar_asignaciones():
+    return _ultima_tabla(_tablas("GET", "/asignaciones", reintentar=True))
 
 
-def cambiar_entrenador(id_cliente, id_entrenador, motivo, id_usuario):
-    return _primera_fila(ejecutar(
-        "usp_Escritorio_CambiarEntrenador", reintentar=False,
-        id_cliente=id_cliente, id_entrenador=id_entrenador, motivo=motivo or None, id_usuario=id_usuario))
+def cambiar_entrenador(id_cliente, id_entrenador, motivo):
+    """Agrega el entrenador al cliente (07_entrenadores.sql: sin quitar los que ya tiene)."""
+    return _primera_fila(_tablas("POST", "/entrenadores/agregar", {
+        "id_cliente": id_cliente, "id_entrenador": id_entrenador, "motivo": motivo or None}))
 
 
-def listar_productos(id_sucursal):
-    return _ultima_tabla(ejecutar("usp_Escritorio_ListarProductos", id_sucursal=id_sucursal))
+def quitar_entrenador(id_cliente, id_entrenador):
+    """Cierra la asignación de ese entrenador (el cliente puede tener varios)."""
+    return _primera_fila(_tablas("POST", "/entrenadores/quitar", {
+        "id_cliente": id_cliente, "id_entrenador": id_entrenador}))
 
 
-def vender_productos(id_cliente, id_sucursal, id_metodo_pago, id_usuario, carrito):
+def listar_productos():
+    return _ultima_tabla(_tablas("GET", "/productos", reintentar=True))
+
+
+def vender_productos(id_cliente, id_metodo_pago, carrito):
     """carrito: {id_producto: cantidad}"""
-    productos = json.dumps([{"id_producto": int(i), "cantidad": int(c)} for i, c in carrito.items()])
-    return _primera_fila(ejecutar(
-        "usp_Escritorio_VenderProductos", reintentar=False,
-        id_cliente=id_cliente, id_sucursal=id_sucursal, id_metodo_pago=id_metodo_pago,
-        id_usuario=id_usuario, productos=productos))
+    productos = [{"id_producto": int(i), "cantidad": int(c)} for i, c in carrito.items()]
+    return _primera_fila(_tablas("POST", "/ventas", {
+        "id_cliente": id_cliente, "id_metodo_pago": id_metodo_pago, "productos": productos}))
+
+
+def detalle_factura(id_factura):
+    """Todo lo que lleva el PDF: {"factura": {...}, "lineas": [...], "pagos": [...]}"""
+    tablas = _tablas("GET", f"/facturas/{int(id_factura)}", reintentar=True)
+    if len(tablas) < 3 or not tablas[0]:
+        raise ErrorBD("No se encontraron los datos de la factura.")
+    return {"factura": tablas[0][0], "lineas": tablas[1], "pagos": tablas[2]}
+
+
+# =============================================================================
+# CHAT CON CLIENTES — el MISMO chat de la app móvil (chat.tsx), tabla ChatMensaje (13_chat.sql):
+#   el cliente le escribe a SU sucursal y la recepción contesta desde aquí.
+# Las fechas ya vienen en hora de Guatemala.
+# =============================================================================
+def chat_conversaciones():
+    """Clientes que le han escrito a la sucursal (el más reciente primero):
+    id_cliente, cliente, ultimo_texto, ultimo_de_cliente, ultima_fecha, sin_leer"""
+    return _ultima_tabla(_tablas("GET", "/chat/conversaciones", reintentar=True))
+
+
+def chat_buscar_clientes(buscar):
+    """Clientes de la sucursal cuyo nombre, alias o DPI coincide (para empezar un chat)."""
+    return _ultima_tabla(_tablas("GET", "/chat/clientes", parametros={"buscar": buscar}, reintentar=True))
+
+
+def chat_mensajes(id_cliente, despues=0):
+    """Mensajes con id mayor a 'despues' (y marca como leídos los del cliente):
+    id_mensaje, texto, fecha, de_cliente, leido, autor"""
+    return _ultima_tabla(_tablas("GET", f"/chat/{int(id_cliente)}/mensajes",
+                                 parametros={"despues": despues}, reintentar=True))
+
+
+def chat_enviar(id_cliente, texto):
+    """Devuelve el id_mensaje nuevo."""
+    texto = (texto or "").strip()
+    if not texto:
+        raise ErrorBD("Escribe un mensaje.")
+    if len(texto) > LARGO_MAXIMO_MENSAJE:
+        raise ErrorBD(f"El mensaje es muy largo (máximo {LARGO_MAXIMO_MENSAJE} caracteres).")
+    # Sin reintento: si la conexión se cae a medio envío, no se manda dos veces
+    fila = _primera_fila(_tablas("POST", f"/chat/{int(id_cliente)}/mensajes", {"texto": texto}))
+    return fila["id_mensaje"]
+
+
+def chat_sin_leer():
+    """Mensajes de clientes que la sucursal no ha leído (número del menú)."""
+    return _primera_fila(_tablas("GET", "/chat/sin-leer", reintentar=True))["sin_leer"]
