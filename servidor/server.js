@@ -62,6 +62,7 @@ app.use('/trama', require('./rutas/trama')); // TRAMAS: lo que usa la app (FM|1|
 app.use('/auth', require('./rutas/auth')); // Inicio de sesión y palabra clave
 app.use('/cliente', require('./rutas/cliente')); // Membresía, rutinas, metas, notificaciones
 app.use('/clases', require('./rutas/clases')); // Clases grupales e inscripción
+app.use('/escritorio', require('./rutas/escritorio')); // App de escritorio de las sucursales (PRINCIPAL.py)
 
 // ERRORES GENERALES
 // Ruta que no existe
