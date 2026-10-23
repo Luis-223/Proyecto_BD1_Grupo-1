@@ -125,6 +125,10 @@ export default function RecuperarContrasena() {
         <View style={styles.contenedorBoton}>
           <Button title={cargando ? "Verificando..." : "Comprobar Alias"} onPress={manejarAlias} disabled={cargando} />
         </View>
+        {/* NUEVO: otro camino, sin pregunta de seguridad */}
+        <Text style={styles.link} onPress={() => router.push({ pathname: '/correo', params: { alias: alias.trim() } })}>
+          Recibir un código en mi correo
+        </Text>
         <Text style={styles.link} onPress={() => router.replace('/')}>
           Volver al inicio de sesión
         </Text>
@@ -150,6 +154,10 @@ export default function RecuperarContrasena() {
         <View style={styles.contenedorBoton}>
           <Button title={cargando ? "Verificando..." : "Comprobar Respuesta"} onPress={manejarRespuesta} disabled={cargando} />
         </View>
+        {/* NUEVO: si no recuerda la respuesta, recibe un código por correo (correo.tsx) */}
+        <Text style={styles.link} onPress={() => router.push({ pathname: '/correo', params: { alias: alias.trim() } })}>
+          ¿No recuerdas la respuesta? Probar otro método
+        </Text>
         <Text style={styles.link} onPress={() => setPaso(1)}>
           Regresar
         </Text>

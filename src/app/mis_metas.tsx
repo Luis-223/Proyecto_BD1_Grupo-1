@@ -11,7 +11,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView,
-  StyleSheet, Text, TextInput, TouchableOpacity, View,
+  StyleSheet, Text, TextInput, TouchableOpacity, View,Image
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { cancelarMeta, crearMeta, listarMetas, registrarAvance } from './conexion';
@@ -133,11 +133,8 @@ export default function MisMetas() {
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => cargar(true)} tintColor="#00E676" colors={['#00E676']} />}
       >
-        <TouchableOpacity style={styles.botonRegresar} onPress={() => (router.canGoBack() ? router.back() : router.replace('/perfil'))}>
-          <Ionicons name="arrow-back" size={20} color="#00E676" />
-          <Text style={styles.textoRegresar}> Volver</Text>
-        </TouchableOpacity>
-        <Text style={styles.titulo}>Mis metas</Text>
+        
+        <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
         <Text style={styles.subtitulo}>{enProgreso.length} en progreso · {cumplidas} {cumplidas === 1 ? 'cumplida' : 'cumplidas'}</Text>
 
         {error !== '' && (
@@ -433,7 +430,7 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 20, paddingTop: 48, paddingBottom: 40 },
   centro: { flex: 1, backgroundColor: '#020700', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
-
+  logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
   botonRegresar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   textoRegresar: { color: '#00E676', fontSize: 14, fontWeight: 'bold' },
   titulo: { fontSize: 22, fontWeight: 'bold', color: '#ffffff' },

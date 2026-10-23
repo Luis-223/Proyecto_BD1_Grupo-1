@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
-  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,Image
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { listarPagos } from './conexion';
@@ -82,11 +82,7 @@ export default function MisPagos() {
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => cargar(true)} tintColor="#00E676" colors={['#00E676']} />}
     >
-      <TouchableOpacity style={styles.botonRegresar} onPress={() => (router.canGoBack() ? router.back() : router.replace('/perfil'))}>
-        <Ionicons name="arrow-back" size={20} color="#00E676" />
-        <Text style={styles.textoRegresar}> Volver</Text>
-      </TouchableOpacity>
-      <Text style={styles.titulo}>Mis pagos</Text>
+      <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
 
       {error !== '' && (
         <Pressable style={styles.cajaError} onPress={() => cargar()}>
@@ -187,7 +183,7 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 20, paddingTop: 48 },
   centro: { flex: 1, backgroundColor: '#020700', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
-
+  logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
   botonRegresar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   textoRegresar: { color: '#00E676', fontSize: 14, fontWeight: 'bold' },
   titulo: { fontSize: 22, fontWeight: 'bold', color: '#ffffff', marginBottom: 14 },

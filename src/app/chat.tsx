@@ -18,7 +18,6 @@ import { enviarMensaje, leerChat } from './conexion';
 import type { MensajeChat } from './conexion';
 
 const CADA_CUANTO_MS = 4000;
-const SUGERENCIAS = ['¿Cuál es el horario de hoy?', 'Quiero renovar mi membresía', 'Tengo una duda con un pago'];
 
 // "2026-10-22T18:05:00" → "18:05"
 const hora = (f: string) => f.slice(11, 16);
@@ -121,7 +120,7 @@ export default function Chat() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.titulo} numberOfLines={1}>Recepción{sucursal ? ` · ${sucursal}` : ''}</Text>
-          <Text style={styles.subtitulo}>Te respondemos en horario de atención</Text>
+          
         </View>
       </View>
 
@@ -145,14 +144,7 @@ export default function Chat() {
             <View style={styles.vacio}>
               <Ionicons name="chatbubbles-outline" size={44} color="#555" />
               <Text style={styles.textoVacio}>Escríbele a tu sucursal</Text>
-              <Text style={styles.textoVacioSub}>Horarios, pagos, clases o cualquier duda.</Text>
-              <View style={styles.sugerencias}>
-                {SUGERENCIAS.map((s) => (
-                  <Pressable key={s} style={styles.sugerencia} onPress={() => enviar(s)}>
-                    <Text style={styles.textoSugerencia}>{s}</Text>
-                  </Pressable>
-                ))}
-              </View>
+              
             </View>
           }
           renderItem={({ item, index }) => {

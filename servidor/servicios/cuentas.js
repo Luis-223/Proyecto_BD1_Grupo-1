@@ -13,10 +13,12 @@
 //     sesión bien, su contraseña se pasa a Argon2 y el hash viejo
 //     se borra. Nadie tiene que cambiar su contraseña.
 
+const crypto = require('crypto');                // NUEVO: genera el código de 6 dígitos al azar
 const argon2 = require('argon2');
 const { sql, conectar } = require('../db');
 const { crearToken, crearLimitador } = require('../seguridad');
 const { ErrorApp } = require('../errores');
+const correo = require('./correo');              // NUEVO: envía el código por correo
 
 //  AJUSTES
 // Argon2id con los valores mínimos que recomienda OWASP:
@@ -34,6 +36,15 @@ const LARGO_MINIMO_PALABRA = 4;
 // 5 intentos fallidos = alias bloqueado 15 minutos
 const limiteLogin = crearLimitador({ maximo: 5, minutos: 15 });
 const limiteRecuperar = crearLimitador({ maximo: 5, minutos: 15 });
+
+// NUEVO — Recuperación con código por correo
+const MINUTOS_CODIGO = 10;                       // Vigencia del código (igual que en el SQL)
+const FORMATO_CODIGO = /^\d{6}$/;                // Exactamente 6 dígitos
+// Mismo mensaje exista o no el alias: así nadie averigua qué usuarios hay
+const MENSAJE_CODIGO_ENVIADO =
+  'Si el usuario existe y tiene un correo registrado, te enviamos un código. Revisa tu bandeja y la carpeta de spam.';
+// 3 pedidos por alias cada 15 minutos (también para alias que no existen)
+const limiteEnvioCodigo = crearLimitador({ maximo: 3, minutos: 15 });
 
 // AYUDANTES
 const texto = (valor) => (valor === undefined || valor === null ? '' : String(valor));
@@ -289,6 +300,106 @@ async function recuperarContrasena(aliasRecibido, palabraRecibida, nuevaRecibida
   return { mensaje: 'Contraseña actualizada. Ya puedes iniciar sesión.' };
 }
 
+// NUEVO — RECUPERAR CONTRASEÑA CON UN CÓDIGO POR CORREO (sin sesión)
+// Paso 1: genera un código de 6 dígitos, guarda SOLO su hash y lo envía.
+async function enviarCodigoRecuperacion(aliasRecibido) {
+  const alias = texto(aliasRecibido).trim();
+  if (!alias) throw new ErrorApp('DATOS', 'Escribe tu usuario');
+
+  // Límite en memoria: cuenta TODOS los pedidos, exista o no el alias
+  const espera = limiteEnvioCodigo.minutosBloqueado(alias);
+  if (espera > 0) {
+    throw new ErrorApp('INTENTOS', `Ya pediste varios códigos. Intenta de nuevo en ${espera} minutos.`);
+  }
+  limiteEnvioCodigo.registrarFallo(alias);
+
+  const pool = await conectar();
+  const resultado = await pool.request()
+    .input('alias', sql.VarChar(60), alias)
+    .execute('usp_ObtenerCorreoRecuperacion');
+  const cuenta = resultado.recordset[0];
+
+  // Alias inexistente o sin correo: misma respuesta y casi el mismo tiempo
+  if (!cuenta) {
+    await gastarTiempoIgual(alias);
+    return { mensaje: MENSAJE_CODIGO_ENVIADO };
+  }
+
+  // randomInt usa el generador seguro del sistema (Math.random NO sirve para esto)
+  const codigo = String(crypto.randomInt(0, 1000000)).padStart(6, '0'); // "004217"
+  const hash = await argon2.hash(codigo, OPCIONES_ARGON2);
+
+  await pool.request()
+    .input('id_alias', sql.Int, cuenta.id_alias)
+    .input('codigo_hash', sql.VarChar(255), hash)
+    .input('minutos', sql.Int, MINUTOS_CODIGO)
+    .execute('usp_GuardarCodigoRecuperacion');
+
+  // El correo se envía "en segundo plano": la respuesta no espera a Gmail.
+  // Así tarda lo mismo que un alias inexistente. Si falla, queda en la consola.
+  correo.enviarCodigoRecuperacion({
+    para: cuenta.correo_recuperacion,
+    nombre: cuenta.nombre,
+    codigo,
+    minutos: MINUTOS_CODIGO,
+  }).catch((error) => console.error(`No se pudo enviar el código a "${alias}":`, error.message));
+
+  return { mensaje: MENSAJE_CODIGO_ENVIADO };
+}
+
+// Paso 2: revisa el código y, si es correcto, cambia la contraseña.
+async function recuperarConCodigo(aliasRecibido, codigoRecibido, nuevaRecibida) {
+  const alias = texto(aliasRecibido).trim();
+  const codigo = texto(codigoRecibido).trim();
+  const nueva = texto(nuevaRecibida);
+
+  if (!alias || !codigo || !nueva) {
+    throw new ErrorApp('DATOS', 'Escribe tu usuario, el código y la contraseña nueva');
+  }
+  if (!FORMATO_CODIGO.test(codigo)) throw new ErrorApp('DATOS', 'El código debe tener 6 dígitos');
+  validarContrasenaNueva(nueva);
+
+  const espera = limiteRecuperar.minutosBloqueado(alias);
+  if (espera > 0) {
+    throw new ErrorApp('INTENTOS', `Demasiados intentos. Intenta de nuevo en ${espera} minutos.`);
+  }
+
+  const pool = await conectar();
+  const resultado = await pool.request()
+    .input('alias', sql.VarChar(60), alias)
+    .execute('usp_ObtenerCodigoRecuperacion');
+  const vigente = resultado.recordset[0];
+
+  // No hay código vigente (no existe, venció, ya se usó o se acabaron los intentos)
+  if (!vigente) {
+    await gastarTiempoIgual(codigo);
+    limiteRecuperar.registrarFallo(alias);
+    throw new ErrorApp('CREDENCIALES', 'El código no es válido o ya venció. Pide uno nuevo.');
+  }
+
+  const correcto = await coincide(vigente.codigo_hash, codigo);
+
+  // Cuenta el intento (si es correcto, el código queda usado y no sirve otra vez)
+  const intento = await pool.request()
+    .input('id_codigo', sql.Int, vigente.id_codigo)
+    .input('exitoso', sql.Bit, correcto ? 1 : 0)
+    .execute('usp_RegistrarIntentoCodigo');
+
+  if (!correcto) {
+    limiteRecuperar.registrarFallo(alias);
+    const quedan = intento.recordset[0]?.intentos_restantes ?? 0;
+    throw new ErrorApp('CREDENCIALES', quedan > 0
+      ? `Código incorrecto. Te quedan ${quedan} intentos.`
+      : 'Código incorrecto. Ese código ya no sirve: pide uno nuevo.');
+  }
+
+  await guardarContrasena(pool, vigente.id_alias, nueva);
+  limiteRecuperar.limpiar(alias);
+  limiteLogin.limpiar(alias);       // si estaba bloqueado en el login, se desbloquea
+  limiteEnvioCodigo.limpiar(alias); // ya terminó: puede pedir otro código si lo necesita
+  return { mensaje: 'Contraseña actualizada. Ya puedes iniciar sesión.' };
+}
+
 // GUARDAR O CAMBIAR LA PALABRA CLAVE (con sesión iniciada)
 // Pide la contraseña actual: así, si alguien encuentra el teléfono
 // con la sesión abierta, no puede cambiar la palabra clave.
@@ -456,6 +567,8 @@ async function registrarCuenta(d) {
 module.exports = {
   iniciarSesion,
   recuperarContrasena,
+  enviarCodigoRecuperacion, // NUEVO
+  recuperarConCodigo,       // NUEVO
   guardarPalabraClave,
   cambiarContrasena,
   listarPreguntas,

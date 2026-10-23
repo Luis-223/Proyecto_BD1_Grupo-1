@@ -121,6 +121,29 @@ const TIPOS = {
     },
   },
 
+  // NUEVO — Recuperar contraseña por CORREO, paso 1 (correo.tsx)
+  // CODIGO_ENVIAR_REQ: alias
+  // CODIGO_ENVIAR_RES: (sin campos extra)
+  //   Siempre responde lo mismo, exista o no el alias.
+  CODIGO_ENVIAR: {
+    campos: 0,
+    async ejecutar([alias]) {
+      const r = await cuentas.enviarCodigoRecuperacion(alias);
+      return { detalle: r.mensaje, campos: [] };
+    },
+  },
+
+  // NUEVO — Recuperar contraseña por CORREO, paso 2 (correo.tsx)
+  // CODIGO_VERIFICAR_REQ: alias | código de 6 dígitos | contraseña nueva
+  // CODIGO_VERIFICAR_RES: (sin campos extra)
+  CODIGO_VERIFICAR: {
+    campos: 0,
+    async ejecutar([alias, codigo, nueva]) {
+      const r = await cuentas.recuperarConCodigo(alias, codigo, nueva);
+      return { detalle: r.mensaje, campos: [] };
+    },
+  },
+
   // PREGUNTAS_REQ: (sin campos)
   // PREGUNTAS_RES: lista "idPregunta^texto~idPregunta^texto"
   PREGUNTAS: {

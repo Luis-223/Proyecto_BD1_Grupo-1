@@ -212,7 +212,19 @@ export function construirRecuperarReq(idMensaje: string, alias: string, palabra:
   return [PROTOCOLO, VERSION, 'RECUPERAR_REQ', idMensaje, alias, palabra, nueva].join(SEP) + '\n';
 }
 
-// VERIFICAR_RESPUESTA_RES y RECUPERAR_RES solo traen código y detalle
+// NUEVO — Recuperar por CORREO, paso 1 — CODIGO_ENVIAR_REQ: alias
+export function construirCodigoEnviarReq(idMensaje: string, alias: string): string {
+  validarCampos([alias]);
+  return [PROTOCOLO, VERSION, 'CODIGO_ENVIAR_REQ', idMensaje, alias].join(SEP) + '\n';
+}
+
+// NUEVO — Recuperar por CORREO, paso 2 — CODIGO_VERIFICAR_REQ: alias | código | contraseña nueva
+export function construirCodigoVerificarReq(idMensaje: string, alias: string, codigo: string, nueva: string): string {
+  validarCampos([alias, codigo, nueva]);
+  return [PROTOCOLO, VERSION, 'CODIGO_VERIFICAR_REQ', idMensaje, alias, codigo, nueva].join(SEP) + '\n';
+}
+
+// VERIFICAR_RESPUESTA_RES, RECUPERAR_RES, CODIGO_ENVIAR_RES y CODIGO_VERIFICAR_RES solo traen código y detalle
 export function leerRespuestaSimple(trama: string, tipo: string): RespuestaSimple {
   const c = trama.trim().split(SEP);
   if (c.length < 6 || c[0] !== PROTOCOLO || c[2] !== `${tipo}_RES`) {

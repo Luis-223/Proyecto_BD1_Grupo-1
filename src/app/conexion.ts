@@ -18,6 +18,8 @@ import {
   construirVerificarRespuestaReq,
   construirRecuperarReq,
   leerRespuestaSimple,
+  construirCodigoEnviarReq,    // NUEVO: recuperar por correo
+  construirCodigoVerificarReq, // NUEVO: recuperar por correo
 } from './trama';
 import type {
   RespuestaLogin, RespuestaSignup, RespuestaCatalogos, RespuestaMembresia,
@@ -249,6 +251,24 @@ export async function recuperarPorTrama(alias: string, palabra: string, nueva: s
   const id = nuevoIdMensaje();
   const texto = await enviarTrama(construirRecuperarReq(id, alias, palabra, nueva));
   return revisarId(leerRespuestaSimple(texto, 'RECUPERAR'), id);
+}
+
+// =============================================================
+// NUEVO — RECUPERAR CONTRASEÑA POR CORREO (correo.tsx) — sin sesión
+// =============================================================
+
+// Paso 1: pedir que el servidor mande un código de 6 dígitos al correo del alias
+export async function enviarCodigoPorCorreo(alias: string): Promise<RespuestaSimple> {
+  const id = nuevoIdMensaje();
+  const texto = await enviarTrama(construirCodigoEnviarReq(id, alias));
+  return revisarId(leerRespuestaSimple(texto, 'CODIGO_ENVIAR'), id);
+}
+
+// Paso 2: mandar el código y la contraseña nueva
+export async function recuperarConCodigoPorTrama(alias: string, codigo: string, nueva: string): Promise<RespuestaSimple> {
+  const id = nuevoIdMensaje();
+  const texto = await enviarTrama(construirCodigoVerificarReq(id, alias, codigo, nueva));
+  return revisarId(leerRespuestaSimple(texto, 'CODIGO_VERIFICAR'), id);
 }
 
 // =============================================================

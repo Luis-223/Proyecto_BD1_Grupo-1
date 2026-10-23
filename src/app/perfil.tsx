@@ -102,9 +102,7 @@ export default function Perfil() {
           <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
           <Text style={styles.subtitulo}>Membresía {membresia.tipo}</Text>
         </View>
-        <View style={styles.chevronCaja}>
-          <Text style={styles.chevron}>⌄</Text>
-        </View>
+        
       </View>
 
       {/* Aviso de membresía vencida (acceso LIMITADO) */}
