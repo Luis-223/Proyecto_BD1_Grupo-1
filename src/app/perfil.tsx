@@ -1,7 +1,7 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ReactNode, useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { consultarMembresia, listarSucursales } from './conexion';
+import { consultarMembresia, listarSucursales, mensajesSinLeer } from './conexion';
 import { cerrarSesion, obtenerSesion } from './sesion'; // NUEVO: cerrarSesion se usaba sin importarlo
 
 type Item = { icono: string; titulo: string };
@@ -33,9 +33,10 @@ const pantallas: Record<string, string> = {
   'Mis pagos': '/mis_pagos',
   'Mi sucursal': '/mi_sucursal',             // NUEVO
   'Todas las sucursales': '/sucursales',     // NUEVO
+  'Mis metas': '/mis_metas',                 // NUEVO
+  'Contactar recepción': '/chat',            // NUEVO: chat directo con la recepción de su sucursal
   'Entrenamiento': '/entrenamiento',
   'Cambiar contraseña': '/cambio_contra', // CAMBIO: antes '/cambiocontra', pero el archivo es cambio_contra.tsx
-  'Contactar recepción': '/chat', // CAMBIO: antes '/contactar', pero el archivo es chat.tsx
 };
 
 function formatearFecha(valor?: string | null): string {
@@ -61,6 +62,8 @@ export default function Perfil() {
   const [membresia, setMembresia] = useState<{ tipo: string; vence: string }>({ tipo: '...', vence: '...' });
   // CAMBIO: antes era 'Chimaltenango' fijo; ahora es el nombre real de su sucursal
   const [sucursal, setSucursal] = useState<string>('...');
+  // NUEVO: mensajes de recepción que el cliente todavía no ha leído
+  const [sinLeer, setSinLeer] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -68,6 +71,9 @@ export default function Perfil() {
       listarSucursales()
         .then((lista) => setSucursal(lista.find((s) => s.es_mia)?.nombre ?? '-'))
         .catch(() => setSucursal('-'));
+      mensajesSinLeer()
+        .then((r) => setSinLeer(r.sin_leer))
+        .catch(() => setSinLeer(0));
       consultarMembresia()
         .then((m) => {
           if (m.activa) {
@@ -158,22 +164,33 @@ export default function Perfil() {
   );
 }
 
-function FilaMenu({ item, onPress }: { item: Item; onPress: () => void }) {
+function FilaMenu({ item, onPress, contador = 0 }: { item: Item; onPress: () => void; contador?: number }) {
   return (
     <Pressable style={styles.filaMenu} onPress={onPress}>
       <Text style={styles.filaMenuIcono}>{item.icono}</Text>
       <Text style={styles.filaMenuTitulo}>{item.titulo}</Text>
+      {/* NUEVO: globito con los mensajes sin leer */}
+      {contador > 0 && (
+        <View style={styles.globo}>
+          <Text style={styles.globoTexto}>{contador > 9 ? '9+' : contador}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
 
-function Seccion({ icono, titulo, children }: { icono: string; titulo: string; children: ReactNode }) {
+function Seccion({ icono, titulo, children, contador = 0 }: { icono: string; titulo: string; children: ReactNode; contador?: number }) {
   const [abierta, setAbierta] = useState(false);
   return (
     <View style={styles.seccionDesplegable}>
       <Pressable style={styles.seccionCabecera} onPress={() => setAbierta(!abierta)}>
         <Text style={styles.filaMenuIcono}>{icono}</Text>
         <Text style={[styles.filaMenuTitulo, { flex: 1 }]}>{titulo}</Text>
+        {contador > 0 && !abierta && (
+          <View style={[styles.globo, { marginRight: 8 }]}>
+            <Text style={styles.globoTexto}>{contador > 9 ? '9+' : contador}</Text>
+          </View>
+        )}
         <Text style={styles.chevron}>{abierta ? '⌃' : '⌄'}</Text>
       </Pressable>
       {abierta && <View style={{ paddingLeft: 12 }}>{children}</View>}
@@ -217,6 +234,8 @@ const styles = StyleSheet.create({
   filaMenu: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 14 },
   filaMenuIcono: { fontSize: 26, width: 34, textAlign: 'center' },
   filaMenuTitulo: { color: '#ffffff', fontSize: 17, fontWeight: '500' },
+  globo: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: '#FF5252', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  globoTexto: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
 
   botonVerMas: { backgroundColor: '#2a2a2a', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8, marginBottom: 12 },
   botonVerMasTexto: { color: '#ffffff', fontSize: 16, fontWeight: '600' },

@@ -23,6 +23,11 @@
 
    Errores: se usan los números 50200 a 50259 (THROW). La app muestra
    el mensaje tal cual, igual que hace el servidor Node con los 50000+.
+
+   IMPORTANTE: 07_entrenadores.sql reemplaza usp_Escritorio_ListarAsignaciones
+   y usp_Escritorio_CambiarEntrenador para permitir VARIOS entrenadores por
+   cliente. Si vuelves a ejecutar ESTE script, ejecuta 07_entrenadores.sql
+   después, o esos dos vuelven a la versión de un solo entrenador.
    ========================================================= */
 
 /* ---------------------------------------------------------
@@ -629,6 +634,9 @@ GO
 SELECT name AS procedimiento FROM sys.procedures
 WHERE name LIKE 'usp[_]Escritorio[_]%'
 ORDER BY name;
+GO
+
+PRINT '>>> Ahora ejecuta 07_entrenadores.sql (varios entrenadores por cliente).';
 GO
 
 SET NOEXEC OFF; -- por si el paso 0 detuvo el script
