@@ -274,6 +274,7 @@ export default function sign_up() {
         <TextInput
           style={styles.input}
           placeholder="Alias"
+          placeholderTextColor="#888888"
           value={aliasUsuario}
           onChangeText={setAliasUsuario}
           autoCapitalize="none"
@@ -281,6 +282,7 @@ export default function sign_up() {
         <TextInput
           style={styles.input}
           placeholder="Correo"
+          placeholderTextColor="#888888"
           value={correoUsuario}
           onChangeText={setCorreoUsuario}
           autoCapitalize="none"
@@ -290,6 +292,7 @@ export default function sign_up() {
           <TextInput
             style={styles.inputConIconoText}
             placeholder="Contraseña"
+            placeholderTextColor="#888888"
             value={contrasena1}
             onChangeText={setContrasena1}
             secureTextEntry={!mostrarContrasena}
@@ -331,6 +334,7 @@ export default function sign_up() {
         <TextInput
           style={styles.input}
           placeholder="Nombre/s"
+          placeholderTextColor="#888888"
           value={nombreUsuario}
           onChangeText={setNombreUsuario}
           autoCapitalize="words"
@@ -338,6 +342,7 @@ export default function sign_up() {
         <TextInput
           style={styles.input}
           placeholder="Apellido/s"
+          placeholderTextColor="#888888"
           value={apellidosUsuario}
           onChangeText={setApellidosUsuario}
           autoCapitalize="words"
@@ -371,6 +376,9 @@ export default function sign_up() {
           labelField="label"
           valueField="value"
           placeholder="Genero"
+          placeholderStyle={styles.dropdownPlaceholder}
+          selectedTextStyle={styles.dropdownTexto}
+          itemTextStyle={styles.dropdownTexto}
           value={generoUsuario}
           onChange={(item) => {
             setGeneroUsuario(item.value);
@@ -381,6 +389,7 @@ export default function sign_up() {
         <TextInput
           style={styles.input}
           placeholder="DPI (Ej. 3073 22076 0401)"
+          placeholderTextColor="#888888"
           keyboardType="numeric"
           maxLength={15}
           value={dpiUsuario}
@@ -392,6 +401,7 @@ export default function sign_up() {
         <TextInput
           style={styles.input}
           placeholder="Teléfono (+502 ####-####)"
+          placeholderTextColor="#888888"
           keyboardType="phone-pad"
           maxLength={15}
           value={telefonoUsuario}
@@ -405,6 +415,9 @@ export default function sign_up() {
           labelField="label"
           valueField="value"
           placeholder="Seleccione su departamento"
+          placeholderStyle={styles.dropdownPlaceholder}
+          selectedTextStyle={styles.dropdownTexto}
+          itemTextStyle={styles.dropdownTexto}
           value={departamentoUsuario}
           onChange={(item) => {
             setDepartamentoUsuario(item.value);
@@ -417,6 +430,9 @@ export default function sign_up() {
           labelField="label"
           valueField="value"
           placeholder="Seleccione su municipio"
+          placeholderStyle={styles.dropdownPlaceholder}
+          selectedTextStyle={styles.dropdownTexto}
+          itemTextStyle={styles.dropdownTexto}
           value={municipioUsuario}
           onChange={(item) => {
             setMunicipioUsuario(item.value);
@@ -428,6 +444,9 @@ export default function sign_up() {
           labelField="label"
           valueField="value"
           placeholder="Seleccione su sucursal"
+          placeholderStyle={styles.dropdownPlaceholder}
+          selectedTextStyle={styles.dropdownTexto}
+          itemTextStyle={styles.dropdownTexto}
           value={sucursalUsuario}
           onChange={(item) => {
             setSucursalUsuario(item.value);
@@ -512,6 +531,9 @@ export default function sign_up() {
             labelField="label"
             valueField="value"
             placeholder="Meses"
+            placeholderStyle={styles.dropdownPlaceholder}
+            selectedTextStyle={styles.dropdownTexto}
+            itemTextStyle={styles.dropdownTexto}
             value={mesPagado}
             disable={!esTarjeta}
             onChange={(item) => {
@@ -606,6 +628,9 @@ export default function sign_up() {
           labelField="label"
           valueField="value"
           placeholder="Pregunta de Seguridad"
+          placeholderStyle={styles.dropdownPlaceholder}
+          selectedTextStyle={styles.dropdownTexto}
+          itemTextStyle={styles.dropdownTexto}
           value={seleccionPregunta}
           onChange={(item) => {
             setSeleccionPregunta(item.value);
@@ -614,6 +639,7 @@ export default function sign_up() {
         <TextInput
           style={styles.input}
           placeholder="Respuesta de seguridad"
+          placeholderTextColor="#888888"
           value={preguntaUsuario}
           onChangeText={setPreguntaUsuario}
           autoCapitalize="none"
@@ -642,7 +668,7 @@ const styles = StyleSheet.create({
   scrollBase: { flex: 1 },
   scrollContent: { padding: 14, paddingBottom: 60 },
   logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
-  input: { borderWidth: 1, borderColor: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#ffffff' },
+  input: { borderWidth: 1, borderColor: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#ffffff', color: '#000000' },
 
   inputConIconoContainer: {
     flexDirection: 'row',
@@ -668,6 +694,10 @@ const styles = StyleSheet.create({
   botones: { flexDirection: 'row', justifyContent: 'center', gap: 12, alignItems: 'center', marginTop: 5, marginBottom: 8 },
   contenedorBoton: { flex: 0.45, marginHorizontal: 6 },
   link: { marginTop: 12, textAlign: 'center', color: '#5eb4ff', textDecorationLine: 'underline' },
+  // Colores fijos: sin ellos Android usa los del tema del teléfono y, en modo oscuro,
+  // el texto de ayuda sale blanco sobre el fondo blanco (no se ve)
+  dropdownPlaceholder: { color: '#888888', fontSize: 14 },
+  dropdownTexto: { color: '#000000', fontSize: 14 },
   dropdown: { height: 50, padding: 12, borderColor: 'gray', borderWidth: 0.5, borderRadius: 8, paddingHorizontal: 8, backgroundColor: '#fff', marginBottom: 12 },
   label: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold', marginTop: 10, marginBottom: 4 },
   contenedorHorizontal: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 6 },
