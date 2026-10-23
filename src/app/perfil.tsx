@@ -35,6 +35,7 @@ const pantallas: Record<string, string> = {
   'Todas las sucursales': '/sucursales',     // NUEVO
   'Entrenamiento': '/entrenamiento',
   'Cambiar contraseña': '/cambio_contra', // CAMBIO: antes '/cambiocontra', pero el archivo es cambio_contra.tsx
+  'Contactar recepción': '/chat', // CAMBIO: antes '/contactar', pero el archivo es chat.tsx
 };
 
 function formatearFecha(valor?: string | null): string {
@@ -142,8 +143,9 @@ export default function Perfil() {
       </Pressable>
 
       {/* Secciones desplegables */}
-      <Seccion icono="❓" titulo="Ayuda y soporte técnico">
-        <FilaMenu item={{ icono: '📞', titulo: 'Contactar recepción' }} onPress={() => abrir('Contactar')} />
+      {/* El globito también sale en la cabecera, para verlo aunque la sección esté cerrada */}
+      <Seccion icono="❓" titulo="Ayuda y soporte técnico" contador={sinLeer}>
+        <FilaMenu item={{ icono: '📞', titulo: 'Contactar recepción' }} onPress={() => abrir('Contactar recepción')} contador={sinLeer} />
 
       </Seccion>
 

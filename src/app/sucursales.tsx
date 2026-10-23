@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
-  ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text,
+  ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text,Image,
   TouchableOpacity, useWindowDimensions, View,
 } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
@@ -96,13 +96,7 @@ export default function Sucursales() {
       refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => cargar(true)} tintColor="#00E676" colors={['#00E676']} />}
     >
       {/* Barra superior */}
-      <View style={styles.barra}>
-        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/perfil'))} hitSlop={10}>
-          <Ionicons name="arrow-back" size={24} color="#ffffff" />
-        </TouchableOpacity>
-        <Text style={styles.marca}>Fit<Text style={{ color: '#00E676' }}>Manager</Text></Text>
-        <View style={{ width: 24 }} />
-      </View>
+     
 
       {error !== '' && (
         <Pressable style={styles.cajaError} onPress={() => cargar()}>
@@ -110,41 +104,8 @@ export default function Sucursales() {
           <Text style={styles.textoErrorSub}>Toca aquí para intentar de nuevo.</Text>
         </Pressable>
       )}
-
-      {/* Historias */}
-      {sucursales.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.historias} contentContainerStyle={styles.historiasContenido}>
-          {sucursales.map((s) => (
-            <Pressable key={s.id_sucursal} style={styles.historia} onPress={() => irA(s.id_sucursal)}>
-              <View style={[styles.anillo, s.es_mia && styles.anilloMio]}>
-                <View style={styles.circulo}>
-                  <Text style={styles.letra}>{s.nombre.charAt(0).toUpperCase()}</Text>
-                </View>
-              </View>
-              <Text style={styles.textoHistoria} numberOfLines={1}>{s.es_mia ? 'Tu sucursal' : (s.municipio || s.nombre)}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
-
-      {/* Publicación 1: mapa con todos los municipios */}
-      {sucursales.length > 0 && (
-        <View style={styles.publicacion}>
-          <Cabecera titulo="FitManager" subtitulo="Guatemala" letra="F" />
-          <MapaSucursales sucursales={sucursales} alto={width} redondeado={false} />
-          <View style={styles.cuerpo}>
-            <Text style={styles.metricas}>
-              {sucursales.length} {sucursales.length === 1 ? 'sucursal' : 'sucursales'} · {totalMiembros} miembros
-            </Text>
-            <Text style={styles.descripcion}>
-              <Text style={styles.negrita}>FitManager </Text>
-              {municipios.length > 0
-                ? `Estamos en ${municipios.length} ${municipios.length === 1 ? 'municipio' : 'municipios'}: ${municipios.join(', ')}.`
-                : 'Conoce todas nuestras sucursales.'}
-            </Text>
-          </View>
-        </View>
-      )}
+<Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
+      
 
       {/* Una publicación por sucursal */}
       {sucursales.map((s) => {
@@ -165,45 +126,11 @@ export default function Sucursales() {
             <MapaSucursales sucursales={[s]} alto={width} redondeado={false} />
 
             {/* Acciones */}
-            <View style={styles.acciones}>
-              <TouchableOpacity onPress={() => alternarFavorita(s.id_sucursal)} hitSlop={8}>
-                <Ionicons name={favorita ? 'heart' : 'heart-outline'} size={27} color={favorita ? '#FF3B5C' : '#ffffff'} />
-              </TouchableOpacity>
-              {s.telefono ? (
-                <TouchableOpacity onPress={() => Linking.openURL(`tel:${s.telefono}`)} hitSlop={8}>
-                  <Ionicons name="call-outline" size={25} color="#ffffff" />
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity onPress={() => abrirComoLlegar(s)} hitSlop={8}>
-                <Ionicons name="navigate-outline" size={25} color="#ffffff" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => compartir(s)} hitSlop={8}>
-                <Ionicons name="paper-plane-outline" size={25} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
+            
 
-            <View style={styles.cuerpo}>
-              <Text style={styles.metricas}>
-                {s.miembros} miembros · {s.entrenadores} {s.entrenadores === 1 ? 'entrenador' : 'entrenadores'} · {s.clases_semana} {s.clases_semana === 1 ? 'clase' : 'clases'} esta semana
-              </Text>
-              <Text style={styles.descripcion}>
-                <Text style={styles.negrita}>{s.nombre} </Text>
-                {s.direccion || 'Dirección por confirmar.'}
-              </Text>
-              {s.telefono ? <Text style={styles.detalle}>📞 {s.telefono}</Text> : null}
-              {s.es_mia ? (
-                <TouchableOpacity onPress={() => router.push('/mi_sucursal')}>
-                  <Text style={styles.verMas}>Ver más de tu sucursal</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
           </View>
         );
       })}
-
-      {sucursales.length > 0 && (
-        <Text style={styles.atribucion}>Ubicación aproximada por municipio · datos de © OpenStreetMap</Text>
-      )}
     </ScrollView>
   );
 }
@@ -220,7 +147,7 @@ function Cabecera({ titulo, subtitulo, letra, insignia }: { titulo: string; subt
         <Text style={styles.usuario} numberOfLines={1}>{titulo}</Text>
         <Text style={styles.ubicacion} numberOfLines={1}>{subtitulo}</Text>
       </View>
-      {insignia ? <Text style={styles.insignia}>{insignia}</Text> : <Ionicons name="ellipsis-horizontal" size={20} color="#ffffff" />}
+      
     </View>
   );
 }
@@ -230,7 +157,7 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, paddingTop: 44, paddingBottom: 30 },
   centro: { flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
-
+logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
   barra: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingBottom: 10 },
   marca: { color: '#ffffff', fontSize: 24, fontWeight: 'bold', fontStyle: 'italic' },
 

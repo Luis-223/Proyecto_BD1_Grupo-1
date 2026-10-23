@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
-  ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View,Image
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import MapaSucursales, { abrirComoLlegar } from '@/components/mapa-sucursales';
@@ -50,12 +50,7 @@ export default function MiSucursal() {
 
   return (
     <ScrollView style={styles.fondo} contentContainerStyle={styles.container}>
-      <TouchableOpacity style={styles.botonRegresar} onPress={() => (router.canGoBack() ? router.back() : router.replace('/perfil'))}>
-        <Ionicons name="arrow-back" size={20} color="#00E676" />
-        <Text style={styles.textoRegresar}> Volver</Text>
-      </TouchableOpacity>
-      <Text style={styles.titulo}>Mi sucursal</Text>
-
+       <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
       {error !== '' && (
         <Pressable style={styles.cajaError} onPress={cargar}>
           <Text style={styles.textoError}>{error}</Text>
@@ -90,28 +85,7 @@ export default function MiSucursal() {
             <Numero valor={sucursal.miembros} etiqueta="Miembros" />
           </View>
 
-          {/* Acciones */}
-          <View style={styles.filaBotones}>
-            <TouchableOpacity style={[styles.boton, styles.botonPrincipal]} onPress={() => abrirComoLlegar(sucursal)}>
-              <Ionicons name="navigate" size={18} color="#020700" />
-              <Text style={styles.textoBotonPrincipal}>Cómo llegar</Text>
-            </TouchableOpacity>
-            {sucursal.telefono ? (
-              <TouchableOpacity style={styles.boton} onPress={() => Linking.openURL(`tel:${sucursal.telefono}`)}>
-                <Ionicons name="call-outline" size={18} color="#00E676" />
-                <Text style={styles.textoBoton}>Llamar</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-
-          <TouchableOpacity style={styles.enlace} onPress={() => router.push('/mi_entrenador')}>
-            <Text style={styles.textoEnlace}>Ver entrenadores de esta sucursal</Text>
-            <Ionicons name="chevron-forward" size={18} color="#00E676" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.enlace} onPress={() => router.push('/sucursales')}>
-            <Text style={styles.textoEnlace}>Ver todas las sucursales</Text>
-            <Ionicons name="chevron-forward" size={18} color="#00E676" />
-          </TouchableOpacity>
+         
         </>
       )}
     </ScrollView>
@@ -142,6 +116,7 @@ function Numero({ valor, etiqueta }: { valor: number; etiqueta: string }) {
 const styles = StyleSheet.create({
   fondo: { flex: 1, backgroundColor: '#020700' },
   container: { flexGrow: 1, padding: 20, paddingTop: 48, paddingBottom: 40 },
+  logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
   centro: { flex: 1, backgroundColor: '#020700', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
 

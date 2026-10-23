@@ -9,7 +9,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
-  ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,Image
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { cancelarClase, inscribirClase, listarClases } from './conexion';
@@ -112,14 +112,7 @@ export default function ClasesGrupales() {
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => cargar(true)} tintColor="#00E676" colors={['#00E676']} />}
     >
-      <TouchableOpacity style={styles.botonRegresar} onPress={() => (router.canGoBack() ? router.back() : router.replace('/perfil'))}>
-        <Ionicons name="arrow-back" size={20} color="#00E676" />
-        <Text style={styles.textoRegresar}> Volver</Text>
-      </TouchableOpacity>
-      <Text style={styles.titulo}>Clases grupales</Text>
-      {clases[0]?.nombre_sucursal ? (
-        <Text style={styles.subtitulo}>Sucursal {clases[0].nombre_sucursal} · Inscrito en {clases.filter((c) => c.ya_inscrito).length}</Text>
-      ) : null}
+      <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
 
       {!incluyeClases && (
         <View style={styles.aviso}>
@@ -232,6 +225,7 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 20, paddingTop: 48 },
   centro: { flex: 1, backgroundColor: '#020700', justifyContent: 'center', alignItems: 'center' },
   textoCargando: { color: '#ffffff', marginTop: 10 },
+  logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
 
   botonRegresar: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   textoRegresar: { color: '#00E676', fontSize: 14, fontWeight: 'bold' },

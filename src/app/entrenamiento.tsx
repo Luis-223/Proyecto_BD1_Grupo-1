@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert,Image } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Accelerometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -156,7 +156,7 @@ export default function DeportesPodometro() {
   if (vista === 'menu') {
     return (
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.headerTitulo}>Mi rutina</Text>
+        <Image source={require('../../assets/images/Banner.jpeg')} style={styles.logo} />
 
         {[
           { nombre: 'Caminar', icono: 'walk' },
@@ -304,6 +304,7 @@ const styles = StyleSheet.create({
     padding: 20,
     justifyContent: 'center',
   },
+  logo: { width: 150, height: 100, alignSelf: 'auto', marginBottom: 5, resizeMode: 'contain' },
   headerTitulo: {
     fontSize: 22,
     fontWeight: 'bold',

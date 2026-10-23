@@ -93,8 +93,8 @@ async function enviarTrama(trama: string): Promise<string> {
 }
 
 // Pide una ruta JSON protegida (manda el token de la sesión).
-// CAMBIO: ahora acepta también POST y DELETE (agregar/quitar entrenador)
-async function pedirJson<T>(ruta: string, metodo: 'GET' | 'POST' | 'DELETE' = 'GET'): Promise<T> {
+// CAMBIO: acepta POST y DELETE, y datos en el cuerpo (metas, chat)
+async function pedirJson<T>(ruta: string, metodo: 'GET' | 'POST' | 'DELETE' = 'GET', cuerpo?: object): Promise<T> {
   const sesion = obtenerSesion();
   if (!sesion?.token) {
     throw new Error('Debes iniciar sesión otra vez.');
@@ -107,7 +107,10 @@ async function pedirJson<T>(ruta: string, metodo: 'GET' | 'POST' | 'DELETE' = 'G
   try {
     const respuesta = await fetch(url, {
       method: metodo,
-      headers: { Authorization: `Bearer ${sesion.token}` },
+      headers: cuerpo
+        ? { Authorization: `Bearer ${sesion.token}`, 'Content-Type': 'application/json' }
+        : { Authorization: `Bearer ${sesion.token}` },
+      body: cuerpo ? JSON.stringify(cuerpo) : undefined,
       signal: control.signal,
     });
     const datos = await respuesta.json().catch(() => null);
@@ -429,4 +432,82 @@ export function inscribirClase(idClase: number): Promise<{ mensaje: string; cupo
 
 export function cancelarClase(idClase: number): Promise<{ mensaje: string; cupos_disponibles: number }> {
   return pedirJson(`/clases/${idClase}/inscripcion`, 'DELETE');
+}
+
+// =============================================================
+// METAS (mis_metas.tsx) — rutas /cliente/metas
+// =============================================================
+
+export type TipoMeta = 'Peso' | 'Fuerza' | 'Distancia' | 'Asistencia' | 'Personalizada';
+
+export type Meta = {
+  id_meta: number;
+  tipo_meta: TipoMeta | string;
+  descripcion: string;
+  unidad_medida: string | null;
+  valor_inicial: number | null;
+  valor_objetivo: number | null;
+  valor_actual: number | null;
+  progreso: number;            // 0 a 100
+  fecha_inicio: string;
+  fecha_objetivo: string | null;
+  estado: 'En progreso' | 'Cumplida' | 'Cancelada' | string;
+  dias_restantes: number | null;
+  avances: { id_avance: number; fecha: string; valor: number; nota: string | null }[];
+};
+
+export type NuevaMeta = {
+  tipo_meta: TipoMeta;
+  descripcion: string;
+  valor_inicial?: number | null;
+  valor_objetivo: number;
+  unidad_medida: string;
+  fecha_objetivo: string;      // AAAA-MM-DD
+};
+
+export function listarMetas(): Promise<Meta[]> {
+  return pedirJson<Meta[]>('/cliente/metas');
+}
+
+export function crearMeta(meta: NuevaMeta): Promise<{ mensaje: string; id_meta: number }> {
+  return pedirJson('/cliente/metas', 'POST', meta);
+}
+
+export function registrarAvance(idMeta: number, valor: number, nota?: string): Promise<{ mensaje: string; estado: string; progreso: number }> {
+  return pedirJson(`/cliente/metas/${idMeta}/avances`, 'POST', { valor, nota });
+}
+
+export function cancelarMeta(idMeta: number): Promise<{ mensaje: string }> {
+  return pedirJson(`/cliente/metas/${idMeta}/cancelar`, 'POST');
+}
+
+// =============================================================
+// CHAT CON SU SUCURSAL (chat.tsx) — rutas /cliente/chat
+// =============================================================
+
+export type MensajeChat = {
+  id_mensaje: number;
+  texto: string;
+  fecha: string;
+  de_cliente: boolean;         // true = lo escribió el cliente; false = la sucursal
+  autor: string;               // "Tú" o el nombre de quien respondió en la sucursal
+  leido: boolean;
+};
+
+export type Chat = {
+  sucursal: string;
+  mensajes: MensajeChat[];
+};
+
+// despues = id del último mensaje que ya se tiene (para pedir solo los nuevos)
+export function leerChat(despues = 0): Promise<Chat> {
+  return pedirJson<Chat>(`/cliente/chat?despues=${despues}`);
+}
+
+export function enviarMensaje(texto: string): Promise<MensajeChat> {
+  return pedirJson<MensajeChat>('/cliente/chat', 'POST', { texto });
+}
+
+export function mensajesSinLeer(): Promise<{ sin_leer: number }> {
+  return pedirJson('/cliente/chat/sin-leer');
 }
