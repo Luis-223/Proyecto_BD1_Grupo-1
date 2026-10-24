@@ -8,7 +8,11 @@
     "scheme": "fitmanager",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/fitmanager-icono.png"
+      "icon": "./assets/images/fitmanager-icono.png",
+      "bundleIdentifier": "com.tuusuario.fitmanager",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.tuusuario.fitmanager",
